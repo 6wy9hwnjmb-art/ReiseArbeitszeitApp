@@ -829,7 +829,7 @@ public partial class MainWindow : Window
 
             StatusText.Text = $"Update {update.Version} wird heruntergeladen...";
             var installerPath = await _updateService.DownloadInstallerAsync(update);
-            Process.Start(new ProcessStartInfo(installerPath) { UseShellExecute = true });
+            _updateService.LaunchInstallerAfterApplicationExit(installerPath);
             Application.Current.Shutdown();
         }
         catch (Exception ex)

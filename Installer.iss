@@ -59,3 +59,64 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{#MyAppName} starten"; Flags: nowait postinstall skipifsilent
+
+[Code]
+var
+  PreviousExeMoved: Boolean;
+  InstallCompleted: Boolean;
+
+function CurrentExePath: String;
+begin
+  Result := ExpandConstant('{app}\{#MyAppExeName}');
+end;
+
+function PreviousExePath: String;
+begin
+  Result := ExpandConstant('{app}\{#MyAppExeName}.update-backup');
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Attempt: Integer;
+begin
+  Result := '';
+  PreviousExeMoved := False;
+
+  if not FileExists(CurrentExePath) then
+    exit;
+
+  if FileExists(PreviousExePath) then
+    DeleteFile(PreviousExePath);
+
+  for Attempt := 1 to 30 do
+  begin
+    if RenameFile(CurrentExePath, PreviousExePath) then
+    begin
+      PreviousExeMoved := True;
+      exit;
+    end;
+
+    Sleep(500);
+  end;
+
+  Result :=
+    'Die laufende Anwendung oder ein Virenscanner blockiert die Programmdatei.' + #13#10 +
+    'Bitte schließen Sie die Anwendung und versuchen Sie das Update erneut.';
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+  begin
+    InstallCompleted := True;
+    if PreviousExeMoved then
+      DeleteFile(PreviousExePath);
+  end;
+end;
+
+procedure DeinitializeSetup;
+begin
+  if PreviousExeMoved and (not InstallCompleted) and
+     (not FileExists(CurrentExePath)) and FileExists(PreviousExePath) then
+    RenameFile(PreviousExePath, CurrentExePath);
+end;

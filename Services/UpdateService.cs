@@ -1,4 +1,6 @@
 using System.IO;
+using System.Diagnostics;
+using System.Globalization;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -77,6 +79,36 @@ public sealed class UpdateService
         await source.CopyToAsync(destination, cancellationToken);
 
         return installerPath;
+    }
+
+    public void LaunchInstallerAfterApplicationExit(string installerPath)
+    {
+        var powerShellPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.System),
+            "WindowsPowerShell",
+            "v1.0",
+            "powershell.exe");
+        var escapedInstallerPath = installerPath.Replace("'", "''", StringComparison.Ordinal);
+        var script =
+            $"Wait-Process -Id {Environment.ProcessId.ToString(CultureInfo.InvariantCulture)} -ErrorAction SilentlyContinue; " +
+            "Start-Sleep -Milliseconds 1500; " +
+            $"Start-Process -FilePath '{escapedInstallerPath}'";
+
+        var startInfo = new ProcessStartInfo(powerShellPath)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WindowStyle = ProcessWindowStyle.Hidden
+        };
+        startInfo.ArgumentList.Add("-NoProfile");
+        startInfo.ArgumentList.Add("-NonInteractive");
+        startInfo.ArgumentList.Add("-WindowStyle");
+        startInfo.ArgumentList.Add("Hidden");
+        startInfo.ArgumentList.Add("-Command");
+        startInfo.ArgumentList.Add(script);
+
+        _ = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Der Update-Installer konnte nicht vorbereitet werden.");
     }
 
     private static HttpClient CreateHttpClient()
