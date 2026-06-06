@@ -70,8 +70,10 @@ public partial class MainWindow : Window
         ApplyDepartureTimeZoneFromLocation(showStatus: false);
         ApplyArrivalTimeZoneFromLocation(showStatus: false);
 
-        StatusText.Text = $"Datenbank: {_database.DatabasePath}";
-        SettingsInfoText.Text = $"Version {AppVersion}\nGespeichert unter: {_settingsService.SettingsPath}";
+        StatusText.Text = _database.LastMigrationBackupPath is null
+            ? $"Datenbank bereit: Schema v{_database.SchemaVersion}"
+            : $"Datenbank auf Schema v{_database.SchemaVersion} aktualisiert und gesichert.";
+        SettingsInfoText.Text = BuildSettingsInfo();
     }
 
     private void LoadLists()
@@ -674,7 +676,7 @@ public partial class MainWindow : Window
             var settings = ReadSettingsFromForm();
             _settingsService.Save(settings);
             _settings = settings;
-            SettingsInfoText.Text = $"Version {AppVersion}\nEinstellungen gespeichert: {_settingsService.SettingsPath}";
+            SettingsInfoText.Text = BuildSettingsInfo("Einstellungen gespeichert.");
             StatusText.Text = "Einstellungen gespeichert.";
         }
         catch (Exception ex)
@@ -801,6 +803,23 @@ public partial class MainWindow : Window
         SettingsDefaultTargetBox.Text = _settings.DefaultTarget;
         SettingsCsvExportFolderBox.Text = _settings.CsvExportFolder;
         SettingsCheckUpdatesBox.IsChecked = _settings.CheckForUpdatesOnStartup;
+    }
+
+    private string BuildSettingsInfo(string? message = null)
+    {
+        var lines = new List<string>();
+        if (!string.IsNullOrWhiteSpace(message))
+            lines.Add(message);
+
+        lines.Add($"App-Version: {AppVersion}");
+        lines.Add($"Datenbank-Schema: v{_database.SchemaVersion}");
+        lines.Add($"Einstellungen: {_settingsService.SettingsPath}");
+        lines.Add($"Datenbank: {_database.DatabasePath}");
+
+        if (_database.LastMigrationBackupPath is not null)
+            lines.Add($"Migrationssicherung: {_database.LastMigrationBackupPath}");
+
+        return string.Join(Environment.NewLine, lines);
     }
 
     private AppSettings ReadSettingsFromForm()

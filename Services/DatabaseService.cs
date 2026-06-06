@@ -8,26 +8,135 @@ namespace ReiseArbeitszeitApp.Services;
 
 public class DatabaseService
 {
+    public const int LatestSchemaVersion = 1;
+
     private readonly string _dbPath;
     private readonly string _connectionString;
 
-    public DatabaseService()
+    public DatabaseService(string? databasePath = null)
     {
-        var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ReiseArbeitszeitApp");
+        var folder = databasePath is null
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ReiseArbeitszeitApp")
+            : Path.GetDirectoryName(Path.GetFullPath(databasePath))
+              ?? throw new InvalidOperationException("Für die Datenbank konnte kein Ordner ermittelt werden.");
+
         Directory.CreateDirectory(folder);
-        _dbPath = Path.Combine(folder, "reise_arbeitszeit.db");
+        _dbPath = databasePath is null
+            ? Path.Combine(folder, "reise_arbeitszeit.db")
+            : Path.GetFullPath(databasePath);
         _connectionString = $"Data Source={_dbPath}";
         Initialize();
     }
 
     public string DatabasePath => _dbPath;
+    public int SchemaVersion { get; private set; }
+    public string? LastMigrationBackupPath { get; private set; }
 
     private void Initialize()
     {
+        var databaseExisted = File.Exists(_dbPath) && new FileInfo(_dbPath).Length > 0;
+        var currentVersion = ReadCurrentSchemaVersion();
+
+        if (currentVersion > LatestSchemaVersion)
+        {
+            throw new InvalidOperationException(
+                $"Die Datenbank verwendet Schema v{currentVersion}, diese App unterstützt jedoch nur bis v{LatestSchemaVersion}.");
+        }
+
+        if (databaseExisted && currentVersion < LatestSchemaVersion)
+            LastMigrationBackupPath = CreateMigrationBackup(currentVersion, LatestSchemaVersion);
+
         using var connection = new SqliteConnection(_connectionString);
         connection.Open();
 
-        ExecuteNonQuery(connection, """
+        for (var version = currentVersion + 1; version <= LatestSchemaVersion; version++)
+            ApplyMigration(connection, version);
+
+        SchemaVersion = ReadSchemaVersion(connection);
+    }
+
+    private int ReadCurrentSchemaVersion()
+    {
+        if (!File.Exists(_dbPath) || new FileInfo(_dbPath).Length == 0)
+            return 0;
+
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        if (!TableExists(connection, "SchemaMigrations"))
+            return 0;
+
+        return ReadSchemaVersion(connection);
+    }
+
+    private static int ReadSchemaVersion(SqliteConnection connection)
+    {
+        if (!TableExists(connection, "SchemaMigrations"))
+            return 0;
+
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COALESCE(MAX(Version), 0) FROM SchemaMigrations;";
+        return Convert.ToInt32((long)command.ExecuteScalar()!);
+    }
+
+    private static bool TableExists(SqliteConnection connection, string tableName)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT COUNT(*)
+            FROM sqlite_master
+            WHERE type = 'table' AND name = $TableName;
+            """;
+        command.Parameters.AddWithValue("$TableName", tableName);
+        return Convert.ToInt32((long)command.ExecuteScalar()!) > 0;
+    }
+
+    private void ApplyMigration(SqliteConnection connection, int version)
+    {
+        using var transaction = connection.BeginTransaction();
+
+        try
+        {
+            switch (version)
+            {
+                case 1:
+                    ApplyMigrationV1(connection, transaction);
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unbekannte Datenbankmigration v{version}.");
+            }
+
+            using var historyCommand = connection.CreateCommand();
+            historyCommand.Transaction = transaction;
+            historyCommand.CommandText = """
+                INSERT INTO SchemaMigrations (Version, AppliedAtUtc)
+                VALUES ($Version, $AppliedAtUtc);
+                """;
+            historyCommand.Parameters.AddWithValue("$Version", version);
+            historyCommand.Parameters.AddWithValue("$AppliedAtUtc", DateTime.UtcNow.ToString("O"));
+            historyCommand.ExecuteNonQuery();
+
+            transaction.Commit();
+        }
+        catch (Exception ex)
+        {
+            transaction.Rollback();
+            throw new InvalidOperationException(
+                $"Die Datenbankmigration auf Schema v{version} ist fehlgeschlagen. Die Datenbank wurde nicht verändert.",
+                ex);
+        }
+    }
+
+    private static void ApplyMigrationV1(SqliteConnection connection, SqliteTransaction transaction)
+    {
+        ExecuteNonQuery(connection, transaction, """
+            CREATE TABLE IF NOT EXISTS SchemaMigrations (
+                Version INTEGER PRIMARY KEY,
+                AppliedAtUtc TEXT NOT NULL
+            );
+            """);
+
+        ExecuteNonQuery(connection, transaction, """
             CREATE TABLE IF NOT EXISTS WorkDays (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 Date TEXT NOT NULL,
@@ -42,7 +151,7 @@ public class DatabaseService
             );
             """);
 
-        ExecuteNonQuery(connection, """
+        ExecuteNonQuery(connection, transaction, """
             CREATE TABLE IF NOT EXISTS Trips (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 DepartureLocation TEXT NOT NULL,
@@ -56,6 +165,30 @@ public class DatabaseService
                 Note TEXT NOT NULL
             );
             """);
+
+        ExecuteNonQuery(connection, transaction, """
+            CREATE INDEX IF NOT EXISTS IX_WorkDays_Date
+            ON WorkDays (Date);
+            """);
+
+        ExecuteNonQuery(connection, transaction, """
+            CREATE INDEX IF NOT EXISTS IX_Trips_DepartureLocalDateTime
+            ON Trips (DepartureLocalDateTime);
+            """);
+    }
+
+    private string CreateMigrationBackup(int fromVersion, int toVersion)
+    {
+        var databaseFolder = Path.GetDirectoryName(_dbPath)
+            ?? throw new InvalidOperationException("Für die Datenbank konnte kein Sicherungsordner ermittelt werden.");
+        var backupFolder = Path.Combine(databaseFolder, "Backups");
+        Directory.CreateDirectory(backupFolder);
+
+        var backupName =
+            $"reise_arbeitszeit_schema-v{fromVersion}-zu-v{toVersion}_{DateTime.Now:yyyyMMdd_HHmmssfff}.db";
+        var backupPath = Path.Combine(backupFolder, backupName);
+        File.Copy(_dbPath, backupPath, overwrite: false);
+        return backupPath;
     }
 
     public void SaveWorkDay(WorkDay day)
@@ -300,9 +433,13 @@ public class DatabaseService
         };
     }
 
-    private static void ExecuteNonQuery(SqliteConnection connection, string sql)
+    private static void ExecuteNonQuery(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string sql)
     {
         using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = sql;
         command.ExecuteNonQuery();
     }
