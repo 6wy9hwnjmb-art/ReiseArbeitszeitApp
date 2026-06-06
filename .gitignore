@@ -1,0 +1,9 @@
+.vs/
+bin/
+obj/
+publish/
+*.user
+*.suo
+*.pdb
+*.log
+Assets/app-icon-source.png
