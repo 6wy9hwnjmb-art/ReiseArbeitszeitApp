@@ -7,6 +7,7 @@ public class WorkDay
 {
     public int Id { get; set; }
     public DateTime Date { get; set; } = DateTime.Today;
+    public WorkDayType DayType { get; set; } = WorkDayType.Work;
     public TimeSpan StartTime { get; set; } = new(7, 0, 0);
     public TimeSpan EndTime { get; set; } = new(16, 0, 0);
     public TimeSpan BreakTime { get; set; } = new(0, 30, 0);
@@ -17,6 +18,7 @@ public class WorkDay
     public TimeSpan TravelWorkTime { get; set; } = TimeSpan.Zero;
 
     public string DateText => Date.ToString("dd.MM.yyyy", CultureInfo.GetCultureInfo("de-DE"));
+    public string DayTypeText => WorkDayTypeInfo.GetDisplayName(DayType);
     public string StartTimeText => TimeFormatter.FormatClock(StartTime);
     public string EndTimeText => TimeFormatter.FormatClock(EndTime);
     public string BreakTimeText => TimeFormatter.FormatDuration(BreakTime);
@@ -40,10 +42,14 @@ public class WorkDay
     {
         get
         {
+            if (IsAbsence)
+                return TargetTime;
+
             var result = GrossTime - BreakTime + TravelWorkTime;
             return result < TimeSpan.Zero ? TimeSpan.Zero : result;
         }
     }
 
+    public bool IsAbsence => DayType is WorkDayType.Vacation or WorkDayType.Sick or WorkDayType.Holiday;
     public TimeSpan Overtime => ActualWorkTime - TargetTime;
 }

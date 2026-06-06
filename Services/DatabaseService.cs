@@ -8,7 +8,7 @@ namespace ReiseArbeitszeitApp.Services;
 
 public class DatabaseService
 {
-    public const int LatestSchemaVersion = 1;
+    public const int LatestSchemaVersion = 2;
 
     private readonly string _dbPath;
     private readonly string _connectionString;
@@ -102,6 +102,9 @@ public class DatabaseService
                 case 1:
                     ApplyMigrationV1(connection, transaction);
                     break;
+                case 2:
+                    ApplyMigrationV2(connection, transaction);
+                    break;
                 default:
                     throw new InvalidOperationException($"Unbekannte Datenbankmigration v{version}.");
             }
@@ -177,6 +180,19 @@ public class DatabaseService
             """);
     }
 
+    private static void ApplyMigrationV2(SqliteConnection connection, SqliteTransaction transaction)
+    {
+        ExecuteNonQuery(connection, transaction, """
+            ALTER TABLE WorkDays
+            ADD COLUMN DayType TEXT NOT NULL DEFAULT 'Work';
+            """);
+
+        ExecuteNonQuery(connection, transaction, """
+            CREATE INDEX IF NOT EXISTS IX_WorkDays_DayType
+            ON WorkDays (DayType);
+            """);
+    }
+
     private string CreateMigrationBackup(int fromVersion, int toVersion)
     {
         var databaseFolder = Path.GetDirectoryName(_dbPath)
@@ -209,10 +225,11 @@ public class DatabaseService
 
         using var command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO WorkDays (Date, StartTime, EndTime, BreakTime, TargetTime, Location, Note, IsTravelDay, TravelWorkTime)
-            VALUES ($Date, $StartTime, $EndTime, $BreakTime, $TargetTime, $Location, $Note, $IsTravelDay, $TravelWorkTime);
+            INSERT INTO WorkDays (Date, DayType, StartTime, EndTime, BreakTime, TargetTime, Location, Note, IsTravelDay, TravelWorkTime)
+            VALUES ($Date, $DayType, $StartTime, $EndTime, $BreakTime, $TargetTime, $Location, $Note, $IsTravelDay, $TravelWorkTime);
             """;
         command.Parameters.AddWithValue("$Date", day.Date.ToString("yyyy-MM-dd"));
+        command.Parameters.AddWithValue("$DayType", day.DayType.ToString());
         command.Parameters.AddWithValue("$StartTime", day.StartTime.ToString());
         command.Parameters.AddWithValue("$EndTime", day.EndTime.ToString());
         command.Parameters.AddWithValue("$BreakTime", day.BreakTime.ToString());
@@ -236,6 +253,7 @@ public class DatabaseService
         command.CommandText = """
             UPDATE WorkDays
             SET Date = $Date,
+                DayType = $DayType,
                 StartTime = $StartTime,
                 EndTime = $EndTime,
                 BreakTime = $BreakTime,
@@ -248,6 +266,7 @@ public class DatabaseService
             """;
         command.Parameters.AddWithValue("$Id", day.Id);
         command.Parameters.AddWithValue("$Date", day.Date.ToString("yyyy-MM-dd"));
+        command.Parameters.AddWithValue("$DayType", day.DayType.ToString());
         command.Parameters.AddWithValue("$StartTime", day.StartTime.ToString());
         command.Parameters.AddWithValue("$EndTime", day.EndTime.ToString());
         command.Parameters.AddWithValue("$BreakTime", day.BreakTime.ToString());
@@ -374,6 +393,7 @@ public class DatabaseService
             {
                 Id = reader.GetInt32(reader.GetOrdinal("Id")),
                 Date = DateTime.Parse(reader.GetString(reader.GetOrdinal("Date"))),
+                DayType = ParseWorkDayType(reader.GetString(reader.GetOrdinal("DayType"))),
                 StartTime = TimeSpan.Parse(reader.GetString(reader.GetOrdinal("StartTime"))),
                 EndTime = TimeSpan.Parse(reader.GetString(reader.GetOrdinal("EndTime"))),
                 BreakTime = TimeSpan.Parse(reader.GetString(reader.GetOrdinal("BreakTime"))),
@@ -427,10 +447,21 @@ public class DatabaseService
             Year = year,
             WorkDayCount = days.Count,
             TravelDayCount = days.Count(x => x.IsTravelDay),
+            HomeOfficeDayCount = days.Count(x => x.DayType == WorkDayType.HomeOffice),
+            VacationDayCount = days.Count(x => x.DayType == WorkDayType.Vacation),
+            SickDayCount = days.Count(x => x.DayType == WorkDayType.Sick),
+            HolidayCount = days.Count(x => x.DayType == WorkDayType.Holiday),
             TotalActualWorkTime = days.Aggregate(TimeSpan.Zero, (sum, x) => sum + x.ActualWorkTime),
             TotalTargetWorkTime = days.Aggregate(TimeSpan.Zero, (sum, x) => sum + x.TargetTime),
             TotalTravelWorkTime = days.Aggregate(TimeSpan.Zero, (sum, x) => sum + x.TravelWorkTime)
         };
+    }
+
+    private static WorkDayType ParseWorkDayType(string value)
+    {
+        return Enum.TryParse<WorkDayType>(value, ignoreCase: true, out var type)
+            ? type
+            : WorkDayType.Work;
     }
 
     private static void ExecuteNonQuery(

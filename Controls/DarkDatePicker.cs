@@ -107,6 +107,8 @@ public class DarkDatePicker : UserControl
         set => SetValue(SelectedDateProperty, value);
     }
 
+    public event EventHandler? SelectedDateChanged;
+
     private static void OnSelectedDateChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is not DarkDatePicker picker)
@@ -117,6 +119,7 @@ public class DarkDatePicker : UserControl
 
         picker.UpdateText();
         picker.RenderCalendar();
+        picker.SelectedDateChanged?.Invoke(picker, EventArgs.Empty);
     }
 
     private Border BuildCalendarPopup()

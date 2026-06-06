@@ -28,5 +28,5 @@ protokolliert.
 
 1. Version in `ReiseArbeitszeitApp.csproj` erhöhen.
 2. Änderungen committen.
-3. Git-Tag im Format `v0.1.1` erstellen und zu GitHub übertragen.
+3. Git-Tag passend zur Projektversion erstellen, zum Beispiel `v0.1.2`, und zu GitHub übertragen.
 4. GitHub Actions erstellt und veröffentlicht EXE, ZIP und Installer.

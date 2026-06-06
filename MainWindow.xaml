@@ -118,12 +118,16 @@
                             <StackPanel>
                                 <TextBlock x:Name="WorkFormTitleText" Text="Arbeitstag erfassen" Style="{StaticResource SectionTitle}"/>
                                 <TextBlock Text="Datum"/>
-                                <controls:DarkDatePicker x:Name="WorkDatePicker"/>
+                                <controls:DarkDatePicker x:Name="WorkDatePicker" SelectedDateChanged="WorkDatePicker_SelectedDateChanged"/>
                                 <WrapPanel Margin="0,-4,0,10">
                                     <Button Content="Heute" Background="{StaticResource CardBrush2}" BorderBrush="{StaticResource BorderBrushSoft}" Click="SetWorkDateToday_Click"/>
                                     <Button Content="Gestern" Background="{StaticResource CardBrush2}" BorderBrush="{StaticResource BorderBrushSoft}" Click="SetWorkDateYesterday_Click"/>
                                     <Button Content="Standardtag speichern" Click="SaveStandardWorkDay_Click"/>
                                 </WrapPanel>
+                                <TextBlock Text="Tagesart"/>
+                                <ComboBox x:Name="WorkDayTypeCombo" SelectionChanged="WorkDayTypeCombo_SelectionChanged"/>
+                                <TextBlock x:Name="WorkHolidayHintText" Foreground="{StaticResource MutedBrush}"
+                                           TextWrapping="Wrap" Margin="0,-4,0,10"/>
                                 <TextBlock Text="Beginn HH:mm"/>
                                 <controls:DarkTimePicker x:Name="WorkStartBox" Text="07:00" MaxHour="23"/>
                                 <TextBlock Text="Ende HH:mm"/>
@@ -133,9 +137,9 @@
                                 <TextBlock Text="Sollzeit HH:mm"/>
                                 <controls:DarkTimePicker x:Name="TargetBox" Text="08:00" MaxHour="24"/>
                                 <CheckBox x:Name="IsTravelDayCheck" Content="Reisetag" Foreground="{StaticResource TextBrush}" Margin="0,4,0,10"/>
-                                <TextBlock Text="angerechnete Reisezeit HH:mm"/>
+                                <TextBlock x:Name="TravelWorkTimeLabel" Text="angerechnete Reisezeit HH:mm"/>
                                 <controls:DarkTimePicker x:Name="TravelWorkTimeBox" Text="00:00" MaxHour="72"/>
-                                <TextBlock Text="Ort / Einsatzort"/>
+                                <TextBlock x:Name="WorkLocationLabel" Text="Ort / Einsatzort"/>
                                 <TextBox x:Name="WorkLocationBox" Text=""/>
                                 <TextBlock Text="Notiz"/>
                                 <TextBox x:Name="WorkNoteBox" Height="70" TextWrapping="Wrap" AcceptsReturn="True"/>
@@ -191,6 +195,7 @@
                             <DataGrid Grid.Row="3" x:Name="WorkDaysGrid" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" MouseDoubleClick="WorkDaysGrid_MouseDoubleClick">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Datum" Binding="{Binding DateText}" Width="100"/>
+                                    <DataGridTextColumn Header="Tagesart" Binding="{Binding DayTypeText}" Width="105"/>
                                     <DataGridTextColumn Header="Beginn" Binding="{Binding StartTimeText}" Width="80"/>
                                     <DataGridTextColumn Header="Ende" Binding="{Binding EndTimeText}" Width="80"/>
                                     <DataGridTextColumn Header="Pause" Binding="{Binding BreakTimeText}" Width="80"/>
@@ -235,7 +240,7 @@
                                 <UniformGrid Columns="4" Margin="0,0,0,16">
                                     <Border Background="{StaticResource CardBrush2}" CornerRadius="8" Padding="18" Margin="0,0,12,0">
                                         <StackPanel>
-                                            <TextBlock Text="Arbeitstage" Foreground="{StaticResource MutedBrush}"/>
+                                            <TextBlock Text="Erfasste Tage" Foreground="{StaticResource MutedBrush}"/>
                                             <TextBlock x:Name="MonthWorkDaysText" FontSize="26" FontWeight="Bold"/>
                                         </StackPanel>
                                     </Border>
@@ -266,7 +271,7 @@
                                 <UniformGrid Columns="4" Margin="0,0,0,16">
                                     <Border Background="{StaticResource CardBrush2}" CornerRadius="8" Padding="18" Margin="0,0,12,0">
                                         <StackPanel>
-                                            <TextBlock Text="Arbeitstage" Foreground="{StaticResource MutedBrush}"/>
+                                            <TextBlock Text="Erfasste Tage" Foreground="{StaticResource MutedBrush}"/>
                                             <TextBlock x:Name="ReportWorkDaysText" FontSize="26" FontWeight="Bold"/>
                                         </StackPanel>
                                     </Border>
@@ -307,6 +312,9 @@
 
                                 <TextBlock Text="Standard-Startort"/>
                                 <TextBox x:Name="SettingsDefaultDepartureLocationBox"/>
+
+                                <TextBlock Text="Bundesland für Feiertage"/>
+                                <ComboBox x:Name="SettingsFederalStateCombo"/>
 
                                 <TextBlock Text="Standard-Arbeitsbeginn HH:mm"/>
                                 <controls:DarkTimePicker x:Name="SettingsDefaultWorkStartBox" MaxHour="23"/>

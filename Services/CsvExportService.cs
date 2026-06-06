@@ -27,13 +27,14 @@ public class CsvExportService
     private static void WriteWorkDays(string path, IReadOnlyCollection<WorkDay> days)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("Datum;Beginn;Ende;Pause;Sollzeit;Reisezeit angerechnet;Istzeit;Überstunden;Reisetag;Ort;Notiz");
+        sb.AppendLine("Datum;Tagesart;Beginn;Ende;Pause;Sollzeit;Reisezeit angerechnet;Istzeit;Überstunden;Reisetag;Ort;Notiz");
 
         foreach (var day in days.OrderBy(x => x.Date))
         {
             sb.AppendLine(string.Join(';', new[]
             {
                 day.Date.ToString("dd.MM.yyyy", CultureInfo.GetCultureInfo("de-DE")),
+                day.DayTypeText,
                 TimeFormatter.FormatClock(day.StartTime),
                 TimeFormatter.FormatClock(day.EndTime),
                 TimeFormatter.FormatDuration(day.BreakTime),

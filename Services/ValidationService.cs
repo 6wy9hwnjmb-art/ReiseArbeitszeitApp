@@ -30,15 +30,15 @@ public class ValidationService
 
         if (hasDuplicateDate)
             warnings.Add($"Für den {day.Date:dd.MM.yyyy} existiert bereits ein Arbeitstag.");
-        if (string.IsNullOrWhiteSpace(day.Location))
+        if (!day.IsAbsence && string.IsNullOrWhiteSpace(day.Location))
             warnings.Add("Ort / Einsatzort ist leer.");
-        if (day.EndTime < day.StartTime)
+        if (!day.IsAbsence && day.EndTime < day.StartTime)
             warnings.Add("Das Arbeitsende liegt vor dem Beginn. Das wird als Nachtschicht über Mitternacht gerechnet.");
-        if (day.BreakTime > day.GrossTime)
+        if (!day.IsAbsence && day.BreakTime > day.GrossTime)
             warnings.Add("Die Pause ist größer als die Anwesenheitszeit.");
         if (day.TravelWorkTime > TimeSpan.Zero && !day.IsTravelDay)
             warnings.Add("Es ist Reisezeit eingetragen, aber Reisetag ist nicht aktiviert.");
-        if (day.GrossTime > TimeSpan.FromHours(16))
+        if (!day.IsAbsence && day.GrossTime > TimeSpan.FromHours(16))
             warnings.Add($"Die Anwesenheitszeit ist sehr lang: {TimeFormatter.Format(day.GrossTime)}.");
         if (day.ActualWorkTime > TimeSpan.FromHours(16))
             warnings.Add($"Die Istzeit ist sehr lang: {TimeFormatter.Format(day.ActualWorkTime)}.");
