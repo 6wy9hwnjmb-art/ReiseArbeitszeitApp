@@ -1,5 +1,4 @@
 ﻿using System.Globalization;
-using System.Diagnostics;
 using System.Windows;
 using System.Windows.Media;
 using ReiseArbeitszeitApp.Helpers;
@@ -16,12 +15,29 @@ public partial class MainWindow : Window
     private static readonly Brush PositiveOvertimeBrush = new SolidColorBrush(Color.FromRgb(52, 199, 89));
     private static readonly Brush NegativeOvertimeBrush = new SolidColorBrush(Color.FromRgb(255, 69, 58));
     private static readonly Brush NeutralOvertimeBrush = new SolidColorBrush(Color.FromRgb(166, 175, 190));
+    private static readonly Brush CalendarWorkBrush = new SolidColorBrush(Color.FromRgb(24, 43, 65));
+    private static readonly Brush CalendarHomeOfficeBrush = new SolidColorBrush(Color.FromRgb(24, 53, 43));
+    private static readonly Brush CalendarVacationBrush = new SolidColorBrush(Color.FromRgb(59, 45, 24));
+    private static readonly Brush CalendarSickBrush = new SolidColorBrush(Color.FromRgb(58, 32, 37));
+    private static readonly Brush CalendarHolidayBrush = new SolidColorBrush(Color.FromRgb(44, 36, 64));
+    private static readonly Brush CalendarTravelBrush = new SolidColorBrush(Color.FromRgb(23, 52, 58));
+    private static readonly Brush CalendarWorkAccentBrush = new SolidColorBrush(Color.FromRgb(79, 163, 255));
+    private static readonly Brush CalendarHomeOfficeAccentBrush = new SolidColorBrush(Color.FromRgb(85, 201, 138));
+    private static readonly Brush CalendarVacationAccentBrush = new SolidColorBrush(Color.FromRgb(240, 181, 90));
+    private static readonly Brush CalendarSickAccentBrush = new SolidColorBrush(Color.FromRgb(255, 107, 118));
+    private static readonly Brush CalendarHolidayAccentBrush = new SolidColorBrush(Color.FromRgb(167, 139, 250));
+    private static readonly Brush CalendarTravelAccentBrush = new SolidColorBrush(Color.FromRgb(94, 208, 223));
+    private static readonly Brush CalendarEmptyBrush = new SolidColorBrush(Color.FromRgb(18, 22, 32));
+    private static readonly Brush CalendarWeekendBrush = new SolidColorBrush(Color.FromRgb(21, 25, 35));
+    private static readonly Brush CalendarDefaultBorderBrush = new SolidColorBrush(Color.FromRgb(48, 55, 71));
+    private static readonly Brush CalendarTodayBorderBrush = new SolidColorBrush(Color.FromRgb(10, 132, 255));
 
-    private readonly DatabaseService _database = new();
+    private DatabaseService _database = new();
     private readonly TimeCalculationService _timeCalculation = new();
     private readonly CsvExportService _csvExport = new();
     private readonly TimeZoneLookupService _timeZoneLookup = new();
     private readonly SettingsService _settingsService = new();
+    private readonly DatabaseBackupService _backupService = new();
     private readonly ValidationService _validation = new();
     private readonly UpdateService _updateService = new();
     private readonly GermanHolidayService _holidayService = new();
@@ -30,10 +46,35 @@ public partial class MainWindow : Window
     private int _editingTripId;
     private int _editingWorkDayId;
     private bool _isUpdatingWorkDayForm;
+    private DateTime _workCalendarMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
 
-    private sealed record MonthOption(int Number, string Name);
-    private sealed record WorkDayTypeOption(WorkDayType Value, string Name);
-    private sealed record FederalStateOption(GermanFederalState Value, string Name);
+    private sealed record MonthOption(int Number, string Name)
+    {
+        public override string ToString() => Name;
+    }
+
+    private sealed record WorkDayTypeOption(WorkDayType Value, string Name)
+    {
+        public override string ToString() => Name;
+    }
+
+    private sealed record FederalStateOption(GermanFederalState Value, string Name)
+    {
+        public override string ToString() => Name;
+    }
+    private sealed class WorkCalendarDay
+    {
+        public DateTime Date { get; init; }
+        public string DayNumber { get; init; } = string.Empty;
+        public string TypeLabel { get; init; } = string.Empty;
+        public string DetailLabel { get; init; } = string.Empty;
+        public string ToolTip { get; init; } = string.Empty;
+        public Brush Background { get; init; } = CalendarEmptyBrush;
+        public Brush Accent { get; init; } = Brushes.Transparent;
+        public Brush Border { get; init; } = CalendarDefaultBorderBrush;
+        public Thickness BorderThickness { get; init; } = new(1);
+        public double Opacity { get; init; } = 1;
+    }
 
     public MainWindow()
     {
@@ -92,12 +133,15 @@ public partial class MainWindow : Window
             ? $"Datenbank bereit: Schema v{_database.SchemaVersion}"
             : $"Datenbank auf Schema v{_database.SchemaVersion} aktualisiert und gesichert.";
         SettingsInfoText.Text = BuildSettingsInfo();
+        RefreshBackupList();
     }
 
     private void LoadLists()
     {
-        WorkDaysGrid.ItemsSource = _database.GetWorkDays().Take(100).ToList();
+        var workDays = _database.GetWorkDays();
+        WorkDaysGrid.ItemsSource = workDays.Take(100).ToList();
         TripsGrid.ItemsSource = _database.GetTrips().Take(100).ToList();
+        RefreshWorkCalendar(workDays);
         UpdateWorkDashboard();
     }
 
@@ -469,6 +513,21 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OpenBulkWorkDay_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new BulkWorkDayWindow(_database, _holidayService, _settings)
+        {
+            Owner = this
+        };
+
+        if (dialog.ShowDialog() != true)
+            return;
+
+        LoadLists();
+        RefreshReport();
+        StatusText.Text = $"{dialog.SavedCount} Tage aus dem Zeitraum gespeichert.";
+    }
+
     private void EditSelectedWorkDay_Click(object sender, RoutedEventArgs e)
     {
         if (WorkDaysGrid.SelectedItem is not WorkDay day)
@@ -539,6 +598,7 @@ public partial class MainWindow : Window
         _isUpdatingWorkDayForm = true;
         _editingWorkDayId = day.Id;
         WorkDatePicker.SelectedDate = day.Date;
+        _workCalendarMonth = new DateTime(day.Date.Year, day.Date.Month, 1);
         WorkDayTypeCombo.SelectedValue = day.DayType;
         WorkStartBox.Text = FormatClockInput(day.StartTime);
         WorkEndBox.Text = FormatClockInput(day.EndTime);
@@ -551,6 +611,8 @@ public partial class MainWindow : Window
         _isUpdatingWorkDayForm = false;
         ApplyWorkDayTypeToForm(resetValues: false);
         UpdateHolidayHint(selectHoliday: false);
+        RefreshWorkCalendar();
+        UpdateWorkDashboard();
         WorkFormTitleText.Text = "Arbeitstag bearbeiten";
         SaveWorkDayButton.Content = "Änderungen speichern";
         WorkPreviewText.Text =
@@ -562,6 +624,7 @@ public partial class MainWindow : Window
         _isUpdatingWorkDayForm = true;
         _editingWorkDayId = 0;
         WorkDatePicker.SelectedDate = DateTime.Today;
+        _workCalendarMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
         WorkDayTypeCombo.SelectedValue = WorkDayType.Work;
         WorkStartBox.Text = _settings.DefaultWorkStart;
         WorkEndBox.Text = _settings.DefaultWorkEnd;
@@ -574,6 +637,8 @@ public partial class MainWindow : Window
         _isUpdatingWorkDayForm = false;
         UpdateHolidayHint(selectHoliday: true);
         ApplyWorkDayTypeToForm(resetValues: false);
+        RefreshWorkCalendar();
+        UpdateWorkDashboard();
         WorkFormTitleText.Text = "Arbeitstag erfassen";
         SaveWorkDayButton.Content = "Speichern";
         WorkPreviewText.Text = "Vorschau: noch keine Berechnung.";
@@ -645,16 +710,15 @@ public partial class MainWindow : Window
 
     private void UpdateWorkDashboard()
     {
-        var today = DateTime.Today;
-        var days = _database.GetWorkDays(today.Year)
-            .Where(x => x.Date.Month == today.Month)
+        var days = _database.GetWorkDays(_workCalendarMonth.Year)
+            .Where(x => x.Date.Month == _workCalendarMonth.Month)
             .ToList();
 
         var actual = days.Aggregate(TimeSpan.Zero, (sum, x) => sum + x.ActualWorkTime);
         var target = days.Aggregate(TimeSpan.Zero, (sum, x) => sum + x.TargetTime);
         var overtime = actual - target;
 
-        WorkDashboardTitleText.Text = $"{CultureInfo.GetCultureInfo("de-DE").DateTimeFormat.GetMonthName(today.Month)} {today.Year}";
+        WorkDashboardTitleText.Text = FormatMonthTitle(_workCalendarMonth);
         WorkDashboardDaysText.Text = days.Count.ToString(CultureInfo.InvariantCulture);
         WorkDashboardActualText.Text = TimeFormatter.Format(actual);
         WorkDashboardTargetText.Text = TimeFormatter.Format(target);
@@ -721,6 +785,7 @@ public partial class MainWindow : Window
             _settingsService.Save(settings);
             _settings = settings;
             UpdateHolidayHint(selectHoliday: _editingWorkDayId == 0);
+            RefreshWorkCalendar();
             SettingsInfoText.Text = BuildSettingsInfo("Einstellungen gespeichert.");
             StatusText.Text = "Einstellungen gespeichert.";
         }
@@ -739,6 +804,7 @@ public partial class MainWindow : Window
             ApplySettingsDefaultsToWorkDay();
             ApplyDepartureTimeZoneFromLocation(showStatus: false);
             UpdateHolidayHint(selectHoliday: _editingWorkDayId == 0);
+            RefreshWorkCalendar();
             SettingsInfoText.Text = "Standardwerte wurden auf die Eingabemasken angewendet.";
             StatusText.Text = "Standardwerte angewendet.";
         }
@@ -752,18 +818,104 @@ public partial class MainWindow : Window
     {
         try
         {
-            var folder = string.IsNullOrWhiteSpace(_settings.CsvExportFolder)
-                ? Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)
-                : _settings.CsvExportFolder;
-
-            System.IO.Directory.CreateDirectory(folder);
-            var fileName = $"reise_arbeitszeit_backup_{DateTime.Now:yyyyMMdd_HHmmss}.db";
-            var backupPath = System.IO.Path.Combine(folder, fileName);
-            System.IO.File.Copy(_database.DatabasePath, backupPath, overwrite: false);
-
-            SettingsInfoText.Text = $"Datenbank gesichert:\n{backupPath}";
+            var backup = _backupService.CreateManualBackup(_database.DatabasePath);
+            RefreshBackupList(backup.FilePath);
+            SettingsInfoText.Text = BuildSettingsInfo($"Datenbank gesichert:\n{backup.FilePath}");
             StatusText.Text = "Datenbank gesichert.";
-            MessageBox.Show($"Backup erfolgreich:\n{backupPath}", "Datenbank sichern", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(
+                $"Die Sicherung wurde geprüft und gespeichert:\n{backup.FilePath}",
+                "Datenbank sichern",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private void RefreshBackups_Click(object sender, RoutedEventArgs e)
+    {
+        RefreshBackupList();
+        StatusText.Text = "Sicherungsliste aktualisiert.";
+    }
+
+    private void BackupsGrid_SelectionChanged(
+        object sender,
+        System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        var hasSelection = BackupsGrid.SelectedItem is DatabaseBackupInfo;
+        RestoreBackupButton.IsEnabled = hasSelection;
+        DeleteBackupButton.IsEnabled = hasSelection;
+    }
+
+    private void RestoreBackup_Click(object sender, RoutedEventArgs e)
+    {
+        if (BackupsGrid.SelectedItem is not DatabaseBackupInfo backup)
+        {
+            ShowError("Bitte zuerst eine Sicherung auswählen.");
+            return;
+        }
+
+        var result = MessageBox.Show(
+            $"Soll die Sicherung vom {backup.CreatedText} wiederhergestellt werden?\n\n" +
+            "Der aktuelle Datenstand wird vorher automatisch gesichert.",
+            "Datenbank wiederherstellen",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes)
+            return;
+
+        try
+        {
+            var safetyBackupPath = _backupService.RestoreDatabase(
+                _database.DatabasePath,
+                backup.FilePath);
+            _database = new DatabaseService();
+
+            ResetTripForm();
+            ResetWorkDayForm();
+            LoadLists();
+            RefreshReport();
+            RefreshBackupList();
+            SettingsInfoText.Text = BuildSettingsInfo(
+                $"Sicherung wiederhergestellt.\nRettungskopie: {safetyBackupPath}");
+            StatusText.Text = "Datenbank erfolgreich wiederhergestellt.";
+
+            MessageBox.Show(
+                $"Die Sicherung wurde wiederhergestellt.\n\nRettungskopie des vorherigen Datenstands:\n{safetyBackupPath}",
+                "Wiederherstellung abgeschlossen",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Wiederherstellung nicht möglich: {ex.Message}");
+        }
+    }
+
+    private void DeleteBackup_Click(object sender, RoutedEventArgs e)
+    {
+        if (BackupsGrid.SelectedItem is not DatabaseBackupInfo backup)
+        {
+            ShowError("Bitte zuerst eine Sicherung auswählen.");
+            return;
+        }
+
+        if (MessageBox.Show(
+                $"Soll diese Sicherung endgültig gelöscht werden?\n\n{backup.FileName}",
+                "Sicherung löschen",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            _backupService.DeleteBackup(backup.FilePath);
+            RefreshBackupList();
+            StatusText.Text = "Sicherung gelöscht.";
         }
         catch (Exception ex)
         {
@@ -773,6 +925,25 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        if (_settings.AutomaticBackupsEnabled)
+        {
+            try
+            {
+                var backup = _backupService.CreateAutomaticBackupIfDue(
+                    _database.DatabasePath,
+                    TimeSpan.FromDays(1));
+                if (backup is not null)
+                {
+                    RefreshBackupList(backup.FilePath);
+                    StatusText.Text = "Automatische Datensicherung erstellt.";
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"Automatische Sicherung fehlgeschlagen: {ex.Message}";
+            }
+        }
+
         if (_settings.CheckForUpdatesOnStartup && UpdateConfiguration.IsConfigured)
             await CheckForUpdatesAsync(showNoUpdateMessage: false);
     }
@@ -850,6 +1021,7 @@ public partial class MainWindow : Window
         SettingsDefaultTargetBox.Text = _settings.DefaultTarget;
         SettingsCsvExportFolderBox.Text = _settings.CsvExportFolder;
         SettingsCheckUpdatesBox.IsChecked = _settings.CheckForUpdatesOnStartup;
+        SettingsAutomaticBackupsBox.IsChecked = _settings.AutomaticBackupsEnabled;
     }
 
     private string BuildSettingsInfo(string? message = null)
@@ -862,11 +1034,44 @@ public partial class MainWindow : Window
         lines.Add($"Datenbank-Schema: v{_database.SchemaVersion}");
         lines.Add($"Einstellungen: {_settingsService.SettingsPath}");
         lines.Add($"Datenbank: {_database.DatabasePath}");
+        lines.Add($"Sicherungen: {_backupService.BackupFolder}");
 
         if (_database.LastMigrationBackupPath is not null)
             lines.Add($"Migrationssicherung: {_database.LastMigrationBackupPath}");
 
         return string.Join(Environment.NewLine, lines);
+    }
+
+    private void RefreshBackupList(string? selectFilePath = null)
+    {
+        var backups = _backupService.GetBackups();
+        BackupsGrid.ItemsSource = backups;
+
+        DatabaseBackupInfo? selectedBackup = null;
+        if (!string.IsNullOrWhiteSpace(selectFilePath))
+        {
+            selectedBackup = backups.FirstOrDefault(
+                backup => string.Equals(
+                    backup.FilePath,
+                    selectFilePath,
+                    StringComparison.OrdinalIgnoreCase));
+        }
+
+        BackupsGrid.SelectedItem = selectedBackup;
+        RestoreBackupButton.IsEnabled = selectedBackup is not null;
+        DeleteBackupButton.IsEnabled = selectedBackup is not null;
+
+        if (backups.Count == 0)
+        {
+            BackupSummaryText.Text =
+                "Noch keine Sicherungen vorhanden. Eine neue Sicherung kann jederzeit manuell erstellt werden.";
+            return;
+        }
+
+        var latest = backups[0];
+        BackupSummaryText.Text =
+            $"{backups.Count} Sicherungen · zuletzt {latest.CreatedText} ({latest.KindText})\n" +
+            _backupService.BackupFolder;
     }
 
     private AppSettings ReadSettingsFromForm()
@@ -880,7 +1085,8 @@ public partial class MainWindow : Window
             DefaultTarget = NormalizeTimeSetting(SettingsDefaultTargetBox.Text, "Standard-Sollzeit"),
             FederalState = GetSelectedFederalState().ToString(),
             CsvExportFolder = SettingsCsvExportFolderBox.Text.Trim(),
-            CheckForUpdatesOnStartup = SettingsCheckUpdatesBox.IsChecked == true
+            CheckForUpdatesOnStartup = SettingsCheckUpdatesBox.IsChecked == true,
+            AutomaticBackupsEnabled = SettingsAutomaticBackupsBox.IsChecked == true
         };
 
         if (string.IsNullOrWhiteSpace(settings.DefaultDepartureLocation))
@@ -909,10 +1115,13 @@ public partial class MainWindow : Window
         _isUpdatingWorkDayForm = true;
         _editingWorkDayId = 0;
         WorkDatePicker.SelectedDate = date.Date;
+        _workCalendarMonth = new DateTime(date.Year, date.Month, 1);
         SetStandardWorkInputs();
         _isUpdatingWorkDayForm = false;
         UpdateHolidayHint(selectHoliday: true);
         ApplyWorkDayTypeToForm(resetValues: false);
+        RefreshWorkCalendar();
+        UpdateWorkDashboard();
         WorkFormTitleText.Text = "Arbeitstag erfassen";
         SaveWorkDayButton.Content = "Speichern";
         WorkPreviewText.Text = "Standardtag vorbereitet.";
@@ -937,7 +1146,204 @@ public partial class MainWindow : Window
         if (_isUpdatingWorkDayForm)
             return;
 
+        if (WorkDatePicker.SelectedDate is DateTime date)
+            _workCalendarMonth = new DateTime(date.Year, date.Month, 1);
+
         UpdateHolidayHint(selectHoliday: _editingWorkDayId == 0);
+        RefreshWorkCalendar();
+        UpdateWorkDashboard();
+    }
+
+    private void PreviousWorkCalendarMonth_Click(object sender, RoutedEventArgs e)
+    {
+        _workCalendarMonth = _workCalendarMonth.AddMonths(-1);
+        RefreshWorkCalendar();
+        UpdateWorkDashboard();
+    }
+
+    private void CurrentWorkCalendarMonth_Click(object sender, RoutedEventArgs e)
+    {
+        _workCalendarMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+        RefreshWorkCalendar();
+        UpdateWorkDashboard();
+    }
+
+    private void NextWorkCalendarMonth_Click(object sender, RoutedEventArgs e)
+    {
+        _workCalendarMonth = _workCalendarMonth.AddMonths(1);
+        RefreshWorkCalendar();
+        UpdateWorkDashboard();
+    }
+
+    private void ShowWorkCalendarView_Click(object sender, RoutedEventArgs e)
+    {
+        SetWorkView(showCalendar: true);
+    }
+
+    private void ShowWorkListView_Click(object sender, RoutedEventArgs e)
+    {
+        SetWorkView(showCalendar: false);
+    }
+
+    private void SetWorkView(bool showCalendar)
+    {
+        WorkCalendarPanel.Visibility = showCalendar ? Visibility.Visible : Visibility.Collapsed;
+        WorkListPanel.Visibility = showCalendar ? Visibility.Collapsed : Visibility.Visible;
+
+        WorkCalendarViewButton.Background = showCalendar ? FindBrush("AccentBrush") : Brushes.Transparent;
+        WorkCalendarViewButton.BorderBrush = showCalendar ? FindBrush("AccentDarkBrush") : Brushes.Transparent;
+        WorkCalendarViewButton.Foreground = showCalendar ? Brushes.White : FindBrush("MutedBrush");
+
+        WorkListViewButton.Background = showCalendar ? Brushes.Transparent : FindBrush("AccentBrush");
+        WorkListViewButton.BorderBrush = showCalendar ? Brushes.Transparent : FindBrush("AccentDarkBrush");
+        WorkListViewButton.Foreground = showCalendar ? FindBrush("MutedBrush") : Brushes.White;
+    }
+
+    private static Brush FindBrush(string resourceName)
+    {
+        return Application.Current.Resources[resourceName] as Brush ?? Brushes.Transparent;
+    }
+
+    private void WorkCalendarDay_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { Tag: DateTime date })
+            return;
+
+        _workCalendarMonth = new DateTime(date.Year, date.Month, 1);
+        var day = _database.GetWorkDays(date.Year)
+            .FirstOrDefault(x => x.Date.Date == date.Date);
+
+        if (day is null)
+        {
+            SetWorkDateAndDefaults(date);
+            StatusText.Text = $"{date:dd.MM.yyyy} kann erfasst werden.";
+        }
+        else
+        {
+            LoadWorkDayIntoForm(day);
+            WorkDaysGrid.SelectedItem = WorkDaysGrid.Items
+                .OfType<WorkDay>()
+                .FirstOrDefault(x => x.Id == day.Id);
+            StatusText.Text = $"{day.DayTypeText} vom {date:dd.MM.yyyy} wurde geladen.";
+        }
+    }
+
+    private void RefreshWorkCalendar(IReadOnlyCollection<WorkDay>? allWorkDays = null)
+    {
+        if (WorkCalendarItems is null || WorkCalendarMonthTitleText is null)
+            return;
+
+        WorkCalendarMonthTitleText.Text = FormatMonthTitle(_workCalendarMonth);
+
+        allWorkDays ??= _database.GetWorkDays();
+        var daysByDate = allWorkDays
+            .GroupBy(x => x.Date.Date)
+            .ToDictionary(group => group.Key, group => group.First());
+        var federalState = GermanFederalStateInfo.ParseOrDefault(_settings.FederalState);
+        var monthEntries = allWorkDays.Count(x =>
+            x.Date.Year == _workCalendarMonth.Year && x.Date.Month == _workCalendarMonth.Month);
+        var monthHolidays = _holidayService.GetHolidays(_workCalendarMonth.Year, federalState)
+            .Count(x => x.Key.Month == _workCalendarMonth.Month);
+        WorkCalendarSummaryText.Text =
+            $"{monthEntries} {(monthEntries == 1 ? "Eintrag" : "Einträge")} · " +
+            $"{monthHolidays} {(monthHolidays == 1 ? "Feiertag" : "Feiertage")}";
+        var selectedDate = WorkDatePicker.SelectedDate?.Date;
+
+        var firstOfMonth = new DateTime(_workCalendarMonth.Year, _workCalendarMonth.Month, 1);
+        var offset = ((int)firstOfMonth.DayOfWeek + 6) % 7;
+        var firstVisibleDate = firstOfMonth.AddDays(-offset);
+        var calendarDays = new List<WorkCalendarDay>(42);
+
+        for (var index = 0; index < 42; index++)
+        {
+            var date = firstVisibleDate.AddDays(index);
+            daysByDate.TryGetValue(date.Date, out var workDay);
+            var holidayName = _holidayService.GetHolidayName(date, federalState);
+            calendarDays.Add(CreateWorkCalendarDay(date, workDay, holidayName, selectedDate));
+        }
+
+        WorkCalendarItems.ItemsSource = calendarDays;
+    }
+
+    private WorkCalendarDay CreateWorkCalendarDay(
+        DateTime date,
+        WorkDay? workDay,
+        string? holidayName,
+        DateTime? selectedDate)
+    {
+        var isCurrentMonth = date.Month == _workCalendarMonth.Month
+                             && date.Year == _workCalendarMonth.Year;
+        var background = date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday
+            ? CalendarWeekendBrush
+            : CalendarEmptyBrush;
+        Brush accent = Brushes.Transparent;
+        var typeLabel = string.Empty;
+        var detailLabel = string.Empty;
+        var toolTip = date.ToString("dddd, dd. MMMM yyyy", CultureInfo.GetCultureInfo("de-DE"));
+
+        if (workDay is not null)
+        {
+            background = workDay.IsTravelDay
+                ? CalendarTravelBrush
+                : workDay.DayType switch
+                {
+                    WorkDayType.HomeOffice => CalendarHomeOfficeBrush,
+                    WorkDayType.Vacation => CalendarVacationBrush,
+                    WorkDayType.Sick => CalendarSickBrush,
+                    WorkDayType.Holiday => CalendarHolidayBrush,
+                    _ => CalendarWorkBrush
+                };
+            accent = workDay.IsTravelDay
+                ? CalendarTravelAccentBrush
+                : workDay.DayType switch
+                {
+                    WorkDayType.HomeOffice => CalendarHomeOfficeAccentBrush,
+                    WorkDayType.Vacation => CalendarVacationAccentBrush,
+                    WorkDayType.Sick => CalendarSickAccentBrush,
+                    WorkDayType.Holiday => CalendarHolidayAccentBrush,
+                    _ => CalendarWorkAccentBrush
+                };
+            var calendarType = workDay.IsTravelDay ? "Reise" : workDay.DayTypeText;
+            var calendarTime = workDay.IsAbsence
+                ? TimeFormatter.FormatDuration(workDay.TargetTime)
+                : TimeFormatter.FormatDuration(workDay.ActualWorkTime);
+            typeLabel = $"{calendarType} · {calendarTime}";
+            toolTip +=
+                $"\n{typeLabel}" +
+                $"\nIst: {TimeFormatter.FormatDuration(workDay.ActualWorkTime)}" +
+                $"\nSoll: {TimeFormatter.FormatDuration(workDay.TargetTime)}" +
+                $"\nSaldo: {TimeFormatter.FormatSignedDuration(workDay.Overtime)}";
+        }
+        else if (holidayName is not null)
+        {
+            background = CalendarHolidayBrush;
+            accent = CalendarHolidayAccentBrush;
+            typeLabel = $"Feiertag · {holidayName}";
+            toolTip += $"\n{holidayName}\nNoch nicht gespeichert";
+        }
+
+        var isSelected = selectedDate == date.Date;
+        var isToday = date.Date == DateTime.Today;
+
+        return new WorkCalendarDay
+        {
+            Date = date.Date,
+            DayNumber = date.Day.ToString(CultureInfo.InvariantCulture),
+            TypeLabel = typeLabel,
+            DetailLabel = detailLabel,
+            ToolTip = toolTip,
+            Background = background,
+            Accent = accent,
+            Border = isSelected || isToday ? CalendarTodayBorderBrush : CalendarDefaultBorderBrush,
+            BorderThickness = isSelected ? new Thickness(2) : new Thickness(1),
+            Opacity = isCurrentMonth ? 1 : 0.45
+        };
+    }
+
+    private static string FormatMonthTitle(DateTime date)
+    {
+        var culture = CultureInfo.GetCultureInfo("de-DE");
+        return culture.TextInfo.ToTitleCase(date.ToString("MMMM yyyy", culture));
     }
 
     private void WorkDayTypeCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)

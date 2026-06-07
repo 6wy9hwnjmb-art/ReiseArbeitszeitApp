@@ -42,10 +42,27 @@ public class DarkDatePicker : UserControl
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(38) });
 
+        var inputBorder = new Border
+        {
+            Background = BackgroundBrush,
+            BorderBrush = BorderLineBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(9)
+        };
+        Grid.SetColumnSpan(inputBorder, 2);
+        root.Children.Add(inputBorder);
+
         _textBox = new TextBox
         {
             Margin = new Thickness(0),
+            Padding = new Thickness(12, 0, 8, 0),
             MinHeight = 38,
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            Foreground = TextBrush,
+            CaretBrush = AccentBrush,
+            SelectionBrush = AccentBrush,
+            FontWeight = FontWeights.SemiBold,
             VerticalContentAlignment = VerticalAlignment.Center
         };
         _textBox.LostFocus += (_, _) => TryParseText();
@@ -62,15 +79,16 @@ public class DarkDatePicker : UserControl
 
         var button = new Button
         {
-            Content = "15",
-            Margin = new Thickness(4, 0, 0, 0),
+            Content = "▦",
+            Margin = new Thickness(4),
             Padding = new Thickness(0),
-            MinHeight = 38,
-            Width = 38,
+            MinHeight = 30,
+            Width = 30,
+            Height = 30,
             Background = CardBrush,
             BorderBrush = BorderLineBrush,
             Foreground = TextBrush,
-            FontSize = 11,
+            FontSize = 16,
             FontWeight = FontWeights.SemiBold
         };
         button.Click += (_, _) => TogglePopup();

@@ -218,6 +218,52 @@ public class DatabaseService
         InsertWorkDay(day);
     }
 
+    public void SaveWorkDays(IReadOnlyCollection<WorkDay> days)
+    {
+        if (days.Count == 0)
+            return;
+        if (days.Any(day => day.Id > 0))
+            throw new InvalidOperationException("Die Mehrfachspeicherung unterstützt nur neue Arbeitstage.");
+
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+
+        try
+        {
+            foreach (var day in days)
+            {
+                using var command = connection.CreateCommand();
+                command.Transaction = transaction;
+                command.CommandText = """
+                    INSERT INTO WorkDays (Date, DayType, StartTime, EndTime, BreakTime, TargetTime, Location, Note, IsTravelDay, TravelWorkTime)
+                    VALUES ($Date, $DayType, $StartTime, $EndTime, $BreakTime, $TargetTime, $Location, $Note, $IsTravelDay, $TravelWorkTime);
+                    """;
+                command.Parameters.AddWithValue("$Date", day.Date.ToString("yyyy-MM-dd"));
+                command.Parameters.AddWithValue("$DayType", day.DayType.ToString());
+                command.Parameters.AddWithValue("$StartTime", day.StartTime.ToString());
+                command.Parameters.AddWithValue("$EndTime", day.EndTime.ToString());
+                command.Parameters.AddWithValue("$BreakTime", day.BreakTime.ToString());
+                command.Parameters.AddWithValue("$TargetTime", day.TargetTime.ToString());
+                command.Parameters.AddWithValue("$Location", day.Location);
+                command.Parameters.AddWithValue("$Note", day.Note);
+                command.Parameters.AddWithValue("$IsTravelDay", day.IsTravelDay ? 1 : 0);
+                command.Parameters.AddWithValue("$TravelWorkTime", day.TravelWorkTime.ToString());
+                command.ExecuteNonQuery();
+                command.CommandText = "SELECT last_insert_rowid();";
+                command.Parameters.Clear();
+                day.Id = Convert.ToInt32((long)command.ExecuteScalar()!);
+            }
+
+            transaction.Commit();
+        }
+        catch
+        {
+            transaction.Rollback();
+            throw;
+        }
+    }
+
     private void InsertWorkDay(WorkDay day)
     {
         using var connection = new SqliteConnection(_connectionString);

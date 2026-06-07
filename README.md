@@ -3,6 +3,16 @@
 Windows-Anwendung zur Berechnung und Verwaltung von Reisezeiten, Zeitzonen,
 Arbeitszeiten und Überstunden.
 
+## Funktionen
+
+- Reisezeitberechnung mit automatischer Zeitzonenerkennung
+- Arbeitszeiterfassung mit Tagesarten und gesetzlichen Feiertagen
+- Monatskalender und Jahresauswertung
+- Mehrtageserfassung für Urlaub, Krankheit, Homeoffice und Feiertage
+- Manuelle und tägliche automatische Datensicherungen
+- Geprüfte Wiederherstellung mit zusätzlicher Rettungskopie
+- Integrierte Updateprüfung und Windows-Installer
+
 ## Entwicklung
 
 Voraussetzungen:
@@ -24,9 +34,13 @@ Sicherung unter `%LOCALAPPDATA%\ReiseArbeitszeitApp\Backups`. Jede Migration
 läuft in einer Transaktion und wird in der Tabelle `SchemaMigrations`
 protokolliert.
 
+Manuelle und automatische Sicherungen werden ebenfalls in diesem Ordner
+verwaltet. Vor jeder Wiederherstellung legt die App eine Rettungskopie des
+aktuellen Datenstands an und prüft die ausgewählte SQLite-Datei.
+
 ## Version veröffentlichen
 
 1. Version in `ReiseArbeitszeitApp.csproj` erhöhen.
 2. Änderungen committen.
-3. Git-Tag passend zur Projektversion erstellen, zum Beispiel `v0.1.3`, und zu GitHub übertragen.
+3. Git-Tag passend zur Projektversion erstellen, zum Beispiel `v0.2.0`, und zu GitHub übertragen.
 4. GitHub Actions erstellt und veröffentlicht EXE, ZIP und Installer.

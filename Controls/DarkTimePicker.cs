@@ -85,7 +85,7 @@ public class DarkTimePicker : UserControl
 
         var popupButton = new Button
         {
-            Content = "00",
+            Content = "↕",
             Margin = new Thickness(4, 4, 4, 4),
             Padding = new Thickness(0),
             Width = 30,
@@ -94,7 +94,7 @@ public class DarkTimePicker : UserControl
             Background = CardBrush,
             BorderBrush = BorderLineBrush,
             Foreground = TextBrush,
-            FontSize = 11,
+            FontSize = 15,
             FontWeight = FontWeights.SemiBold
         };
         popupButton.Click += (_, _) => TogglePopup();
