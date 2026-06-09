@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using ReiseArbeitszeitApp.Helpers;
 using ReiseArbeitszeitApp.Models;
@@ -37,10 +38,11 @@ public partial class MainWindow : Window
     private readonly CsvExportService _csvExport = new();
     private readonly TimeZoneLookupService _timeZoneLookup = new();
     private readonly SettingsService _settingsService = new();
+    private readonly WorkLocationReportService _workLocationReportService = new();
     private readonly DatabaseBackupService _backupService = new();
     private readonly ValidationService _validation = new();
     private readonly UpdateService _updateService = new();
-    private readonly GermanHolidayService _holidayService = new();
+    private readonly HolidayService _holidayService = new();
     private AppSettings _settings = new();
     private TripEntry? _lastTripCalculation;
     private int _editingTripId;
@@ -58,10 +60,6 @@ public partial class MainWindow : Window
         public override string ToString() => Name;
     }
 
-    private sealed record FederalStateOption(GermanFederalState Value, string Name)
-    {
-        public override string ToString() => Name;
-    }
     private sealed class WorkCalendarDay
     {
         public DateTime Date { get; init; }
@@ -99,11 +97,13 @@ public partial class MainWindow : Window
         WorkDayTypeCombo.SelectedValuePath = nameof(WorkDayTypeOption.Value);
         WorkDayTypeCombo.SelectedValue = WorkDayType.Work;
 
-        SettingsFederalStateCombo.ItemsSource = Enum.GetValues<GermanFederalState>()
-            .Select(state => new FederalStateOption(state, GermanFederalStateInfo.GetDisplayName(state)))
-            .ToList();
-        SettingsFederalStateCombo.DisplayMemberPath = nameof(FederalStateOption.Name);
-        SettingsFederalStateCombo.SelectedValuePath = nameof(FederalStateOption.Value);
+        WorkCountryCombo.ItemsSource = CountryCatalog.GetAll();
+        WorkCountryCombo.DisplayMemberPath = nameof(CountryOption.DisplayName);
+        WorkCountryCombo.SelectedValuePath = nameof(CountryOption.Code);
+
+        SettingsHolidayRegionCombo.ItemsSource = HolidayRegionCatalog.GetAll();
+        SettingsHolidayRegionCombo.DisplayMemberPath = nameof(HolidayRegion.DisplayName);
+        SettingsHolidayRegionCombo.SelectedValuePath = nameof(HolidayRegion.Code);
 
         DepartureDatePicker.SelectedDate = DateTime.Today;
         ArrivalDatePicker.SelectedDate = DateTime.Today;
@@ -133,6 +133,7 @@ public partial class MainWindow : Window
             ? $"Datenbank bereit: Schema v{_database.SchemaVersion}"
             : $"Datenbank auf Schema v{_database.SchemaVersion} aktualisiert und gesichert.";
         SettingsInfoText.Text = BuildSettingsInfo();
+        RefreshHolidayRulesSummary();
         RefreshBackupList();
     }
 
@@ -411,6 +412,8 @@ public partial class MainWindow : Window
         TargetBox.Text = _settings.DefaultTarget;
         IsTravelDayCheck.IsChecked = true;
         TravelWorkTimeBox.Text = FormatDurationInput(trip.TravelTime);
+        if (string.IsNullOrWhiteSpace(GetSelectedWorkCountryCode()))
+            WorkCountryCombo.SelectedValue = GetDefaultWorkCountryCode();
         WorkLocationBox.Text = $"{trip.DepartureLocation} -> {trip.ArrivalLocation}";
         WorkNoteBox.Text = string.IsNullOrWhiteSpace(trip.Note)
             ? $"Reisezeit übernommen: {TimeFormatter.Format(trip.TravelTime)}"
@@ -588,6 +591,7 @@ public partial class MainWindow : Window
             TargetTime = ParseTime(TargetBox.Text, "Sollzeit"),
             IsTravelDay = !isAbsence && IsTravelDayCheck.IsChecked == true,
             TravelWorkTime = isAbsence ? TimeSpan.Zero : ParseTime(TravelWorkTimeBox.Text, "angerechnete Reisezeit"),
+            CountryCode = isAbsence ? string.Empty : GetSelectedWorkCountryCode(),
             Location = isAbsence ? string.Empty : WorkLocationBox.Text.Trim(),
             Note = WorkNoteBox.Text.Trim()
         };
@@ -606,6 +610,7 @@ public partial class MainWindow : Window
         TargetBox.Text = FormatDurationInput(day.TargetTime);
         IsTravelDayCheck.IsChecked = day.IsTravelDay;
         TravelWorkTimeBox.Text = FormatDurationInput(day.TravelWorkTime);
+        WorkCountryCombo.SelectedValue = day.CountryCode;
         WorkLocationBox.Text = day.Location;
         WorkNoteBox.Text = day.Note;
         _isUpdatingWorkDayForm = false;
@@ -632,6 +637,7 @@ public partial class MainWindow : Window
         TargetBox.Text = _settings.DefaultTarget;
         IsTravelDayCheck.IsChecked = false;
         TravelWorkTimeBox.Text = "00:00";
+        WorkCountryCombo.SelectedValue = GetDefaultWorkCountryCode();
         WorkLocationBox.Text = string.Empty;
         WorkNoteBox.Text = string.Empty;
         _isUpdatingWorkDayForm = false;
@@ -668,9 +674,10 @@ public partial class MainWindow : Window
     {
         var year = ParseYear();
         var month = ParseMonth();
+        var yearDays = _database.GetWorkDays(year);
         var report = _database.GetYearReport(year);
         var trips = _database.GetTrips(year);
-        var monthDays = _database.GetWorkDays(year).Where(x => x.Date.Month == month).ToList();
+        var monthDays = yearDays.Where(x => x.Date.Month == month).ToList();
         var monthTrips = trips.Where(x => x.DepartureLocalDateTime.Month == month).ToList();
 
         var monthActual = monthDays.Aggregate(TimeSpan.Zero, (sum, x) => sum + x.ActualWorkTime);
@@ -706,6 +713,23 @@ public partial class MainWindow : Window
             $"Angerechnete Reisezeit: {TimeFormatter.Format(report.TotalTravelWorkTime)} | " +
             $"Gespeicherte Reisen: {trips.Count} | " +
             $"Gesamte reine Reisezeit: {TimeFormatter.Format(trips.Aggregate(TimeSpan.Zero, (sum, x) => sum + x.TravelTime))}";
+
+        var countryRows = _workLocationReportService.CreateCountryRows(monthDays, yearDays);
+        var locationRows = _workLocationReportService.CreateLocationRows(monthDays, yearDays);
+        CountryReportGrid.ItemsSource = countryRows;
+        LocationReportGrid.ItemsSource = locationRows;
+        CountryReportSummaryText.Text = CreateWorkLocationSummary(countryRows.Count, "Land", "Länder");
+        LocationReportSummaryText.Text = CreateWorkLocationSummary(locationRows.Count, "Einsatzort", "Einsatzorte");
+    }
+
+    private static string CreateWorkLocationSummary(int count, string singular, string plural)
+    {
+        return count switch
+        {
+            0 => "Noch keine regulären Arbeitstage mit Arbeitsort vorhanden.",
+            1 => $"1 {singular} im ausgewählten Jahr",
+            _ => $"{count} {plural} im ausgewählten Jahr"
+        };
     }
 
     private void UpdateWorkDashboard()
@@ -814,6 +838,32 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ManageHolidayRules_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new HolidayRulesWindow(_database, _holidayService, _settings)
+        {
+            Owner = this
+        };
+
+        if (dialog.ShowDialog() != true)
+            return;
+
+        RefreshHolidayRulesSummary();
+        UpdateHolidayHint(selectHoliday: _editingWorkDayId == 0);
+        RefreshWorkCalendar();
+        StatusText.Text = "Feiertagsregeln aktualisiert.";
+    }
+
+    private void RefreshHolidayRulesSummary()
+    {
+        var rules = _database.GetHolidayRules();
+        var customCount = rules.Count(rule => rule.Kind == HolidayRuleKind.CustomHoliday);
+        var disabledCount = rules.Count(rule =>
+            rule.Kind == HolidayRuleKind.DisabledAutomaticHoliday);
+        HolidayRulesSummaryText.Text =
+            $"{customCount} eigene Feiertage · {disabledCount} automatische Feiertage deaktiviert";
+    }
+
     private void BackupDatabase_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -877,6 +927,7 @@ public partial class MainWindow : Window
             ResetWorkDayForm();
             LoadLists();
             RefreshReport();
+            RefreshHolidayRulesSummary();
             RefreshBackupList();
             SettingsInfoText.Text = BuildSettingsInfo(
                 $"Sicherung wiederhergestellt.\nRettungskopie: {safetyBackupPath}");
@@ -1014,7 +1065,9 @@ public partial class MainWindow : Window
     private void LoadSettingsIntoForm()
     {
         SettingsDefaultDepartureLocationBox.Text = _settings.DefaultDepartureLocation;
-        SettingsFederalStateCombo.SelectedValue = GermanFederalStateInfo.ParseOrDefault(_settings.FederalState);
+        var region = HolidayRegionCatalog.Resolve(_settings);
+        SettingsHolidayRegionCombo.SelectedValue = region.Code;
+        UpdateHolidayRegionSettingsHint(region);
         SettingsDefaultWorkStartBox.Text = _settings.DefaultWorkStart;
         SettingsDefaultWorkEndBox.Text = _settings.DefaultWorkEnd;
         SettingsDefaultBreakBox.Text = _settings.DefaultBreak;
@@ -1032,6 +1085,7 @@ public partial class MainWindow : Window
 
         lines.Add($"App-Version: {AppVersion}");
         lines.Add($"Datenbank-Schema: v{_database.SchemaVersion}");
+        lines.Add($"Feiertagsregion: {_holidayService.GetRegion(_settings).DisplayName}");
         lines.Add($"Einstellungen: {_settingsService.SettingsPath}");
         lines.Add($"Datenbank: {_database.DatabasePath}");
         lines.Add($"Sicherungen: {_backupService.BackupFolder}");
@@ -1076,6 +1130,7 @@ public partial class MainWindow : Window
 
     private AppSettings ReadSettingsFromForm()
     {
+        var holidayRegion = GetSelectedHolidayRegion();
         var settings = new AppSettings
         {
             DefaultDepartureLocation = SettingsDefaultDepartureLocationBox.Text.Trim(),
@@ -1083,7 +1138,8 @@ public partial class MainWindow : Window
             DefaultWorkEnd = NormalizeTimeSetting(SettingsDefaultWorkEndBox.Text, "Standard-Arbeitsende"),
             DefaultBreak = NormalizeTimeSetting(SettingsDefaultBreakBox.Text, "Standard-Pause"),
             DefaultTarget = NormalizeTimeSetting(SettingsDefaultTargetBox.Text, "Standard-Sollzeit"),
-            FederalState = GetSelectedFederalState().ToString(),
+            HolidayRegionCode = holidayRegion.Code,
+            FederalState = holidayRegion.GermanState?.ToString() ?? _settings.FederalState,
             CsvExportFolder = SettingsCsvExportFolderBox.Text.Trim(),
             CheckForUpdatesOnStartup = SettingsCheckUpdatesBox.IsChecked == true,
             AutomaticBackupsEnabled = SettingsAutomaticBackupsBox.IsChecked == true
@@ -1108,6 +1164,8 @@ public partial class MainWindow : Window
         WorkEndBox.Text = _settings.DefaultWorkEnd;
         BreakBox.Text = _settings.DefaultBreak;
         TargetBox.Text = _settings.DefaultTarget;
+        if (_editingWorkDayId == 0)
+            WorkCountryCombo.SelectedValue = GetDefaultWorkCountryCode();
     }
 
     private void SetWorkDateAndDefaults(DateTime date)
@@ -1136,6 +1194,7 @@ public partial class MainWindow : Window
         TargetBox.Text = _settings.DefaultTarget;
         IsTravelDayCheck.IsChecked = false;
         TravelWorkTimeBox.Text = "00:00";
+        WorkCountryCombo.SelectedValue = GetDefaultWorkCountryCode();
 
         if (string.IsNullOrWhiteSpace(WorkLocationBox.Text))
             WorkLocationBox.Text = _settings.DefaultDepartureLocation;
@@ -1152,6 +1211,14 @@ public partial class MainWindow : Window
         UpdateHolidayHint(selectHoliday: _editingWorkDayId == 0);
         RefreshWorkCalendar();
         UpdateWorkDashboard();
+    }
+
+    private void WorkLocationContext_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingWorkDayForm || WorkDatePicker.SelectedDate is null)
+            return;
+
+        UpdateHolidayHint(selectHoliday: _editingWorkDayId == 0);
     }
 
     private void PreviousWorkCalendarMonth_Click(object sender, RoutedEventArgs e)
@@ -1239,10 +1306,13 @@ public partial class MainWindow : Window
         var daysByDate = allWorkDays
             .GroupBy(x => x.Date.Date)
             .ToDictionary(group => group.Key, group => group.First());
-        var federalState = GermanFederalStateInfo.ParseOrDefault(_settings.FederalState);
         var monthEntries = allWorkDays.Count(x =>
             x.Date.Year == _workCalendarMonth.Year && x.Date.Month == _workCalendarMonth.Month);
-        var monthHolidays = _holidayService.GetHolidays(_workCalendarMonth.Year, federalState)
+        var holidayRules = _database.GetHolidayRules();
+        var monthHolidays = _holidayService.GetHolidays(
+                _workCalendarMonth.Year,
+                _settings,
+                holidayRules)
             .Count(x => x.Key.Month == _workCalendarMonth.Month);
         WorkCalendarSummaryText.Text =
             $"{monthEntries} {(monthEntries == 1 ? "Eintrag" : "Einträge")} · " +
@@ -1258,7 +1328,12 @@ public partial class MainWindow : Window
         {
             var date = firstVisibleDate.AddDays(index);
             daysByDate.TryGetValue(date.Date, out var workDay);
-            var holidayName = _holidayService.GetHolidayName(date, federalState);
+            var holidayName = _holidayService.GetHolidayName(
+                date,
+                _settings,
+                holidayRules,
+                workDay?.CountryCode,
+                workDay?.Location);
             calendarDays.Add(CreateWorkCalendarDay(date, workDay, holidayName, selectedDate));
         }
 
@@ -1313,6 +1388,8 @@ public partial class MainWindow : Window
                 $"\nIst: {TimeFormatter.FormatDuration(workDay.ActualWorkTime)}" +
                 $"\nSoll: {TimeFormatter.FormatDuration(workDay.TargetTime)}" +
                 $"\nSaldo: {TimeFormatter.FormatSignedDuration(workDay.Overtime)}";
+            if (!workDay.IsAbsence && !string.IsNullOrWhiteSpace(workDay.Location))
+                toolTip += $"\nArbeitsort: {workDay.Location}, {workDay.CountryName}";
         }
         else if (holidayName is not null)
         {
@@ -1362,11 +1439,19 @@ public partial class MainWindow : Window
             return;
         }
 
-        var state = GermanFederalStateInfo.ParseOrDefault(_settings.FederalState);
-        var holidayName = _holidayService.GetHolidayName(date, state);
+        var region = _holidayService.GetRegion(_settings);
+        var holidayName = _holidayService.GetHolidayName(
+            date,
+            _settings,
+            _database.GetHolidayRules(),
+            GetSelectedWorkCountryCode(),
+            WorkLocationBox.Text);
+        var regionNotice = _holidayService.GetRegionNotice(_settings);
         WorkHolidayHintText.Text = holidayName is null
-            ? $"Kein gesetzlicher Feiertag in {GermanFederalStateInfo.GetDisplayName(state)}."
-            : $"{holidayName} · automatisch erkannt für {GermanFederalStateInfo.GetDisplayName(state)}";
+            ? $"Kein erfasster Feiertag in {region.ShortDisplayName}."
+            : $"{holidayName} · automatisch erkannt für {region.ShortDisplayName}";
+        if (!string.IsNullOrWhiteSpace(regionNotice))
+            WorkHolidayHintText.Text += $"{Environment.NewLine}{regionNotice}";
 
         if (!selectHoliday)
             return;
@@ -1391,6 +1476,8 @@ public partial class MainWindow : Window
         IsTravelDayCheck.IsEnabled = !isAbsence;
         TravelWorkTimeLabel.IsEnabled = !isAbsence;
         TravelWorkTimeBox.IsEnabled = !isAbsence;
+        WorkCountryLabel.IsEnabled = !isAbsence;
+        WorkCountryCombo.IsEnabled = !isAbsence;
         WorkLocationLabel.IsEnabled = !isAbsence;
         WorkLocationBox.IsEnabled = !isAbsence;
 
@@ -1404,6 +1491,7 @@ public partial class MainWindow : Window
             BreakBox.Text = "00:00";
             IsTravelDayCheck.IsChecked = false;
             TravelWorkTimeBox.Text = "00:00";
+            WorkCountryCombo.SelectedValue = string.Empty;
             WorkLocationBox.Text = string.Empty;
             return;
         }
@@ -1417,11 +1505,15 @@ public partial class MainWindow : Window
 
         if (type == WorkDayType.HomeOffice)
         {
+            if (string.IsNullOrWhiteSpace(GetSelectedWorkCountryCode()))
+                WorkCountryCombo.SelectedValue = GetDefaultWorkCountryCode();
             WorkLocationBox.Text = "Homeoffice";
         }
         else if (string.IsNullOrWhiteSpace(WorkLocationBox.Text)
                  || string.Equals(WorkLocationBox.Text.Trim(), "Homeoffice", StringComparison.OrdinalIgnoreCase))
         {
+            if (string.IsNullOrWhiteSpace(GetSelectedWorkCountryCode()))
+                WorkCountryCombo.SelectedValue = GetDefaultWorkCountryCode();
             WorkLocationBox.Text = _settings.DefaultDepartureLocation;
         }
     }
@@ -1435,13 +1527,57 @@ public partial class MainWindow : Window
         return WorkDayType.Work;
     }
 
-    private GermanFederalState GetSelectedFederalState()
+    private string GetSelectedWorkCountryCode()
     {
-        if (SettingsFederalStateCombo.SelectedValue is GermanFederalState state)
-            return state;
-        if (SettingsFederalStateCombo.SelectedItem is FederalStateOption option)
-            return option.Value;
-        return GermanFederalState.Hessen;
+        if (WorkCountryCombo.SelectedValue is string code)
+            return code;
+        if (WorkCountryCombo.SelectedItem is CountryOption country)
+            return country.Code;
+        return string.Empty;
+    }
+
+    private string GetDefaultWorkCountryCode()
+    {
+        return HolidayRegionCatalog.Resolve(_settings).Country == HolidayCountry.Switzerland
+            ? "CH"
+            : "DE";
+    }
+
+    private HolidayRegion GetSelectedHolidayRegion()
+    {
+        if (SettingsHolidayRegionCombo.SelectedItem is HolidayRegion region)
+            return region;
+        if (SettingsHolidayRegionCombo.SelectedValue is string code)
+        {
+            var selected = HolidayRegionCatalog.GetAll().FirstOrDefault(
+                item => string.Equals(item.Code, code, StringComparison.OrdinalIgnoreCase));
+            if (selected is not null)
+                return selected;
+        }
+
+        return HolidayRegionCatalog.Resolve(_settings);
+    }
+
+    private void SettingsHolidayRegionCombo_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        if (SettingsHolidayRegionCombo.SelectedItem is HolidayRegion region)
+            UpdateHolidayRegionSettingsHint(region);
+    }
+
+    private void UpdateHolidayRegionSettingsHint(HolidayRegion region)
+    {
+        if (region.Country == HolidayCountry.Germany)
+        {
+            SettingsHolidayRegionHintText.Text =
+                $"Gesetzliche Feiertage für {region.RegionName}.";
+            return;
+        }
+
+        SettingsHolidayRegionHintText.Text = region.HasLocalVariations
+            ? "Kantonsweit geltende Feiertage werden automatisch berücksichtigt. Je nach Bezirk oder Gemeinde können weitere Feiertage gelten."
+            : "Kantonale Feiertage werden automatisch berücksichtigt. Lokale oder vertragliche Sonderregelungen können zusätzlich gelten.";
     }
 
     private int ParseYear()

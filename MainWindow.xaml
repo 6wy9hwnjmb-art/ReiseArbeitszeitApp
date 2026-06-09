@@ -140,8 +140,15 @@
                                 <CheckBox x:Name="IsTravelDayCheck" Content="Reisetag" Foreground="{StaticResource TextBrush}" Margin="0,4,0,10"/>
                                 <TextBlock x:Name="TravelWorkTimeLabel" Text="angerechnete Reisezeit HH:mm"/>
                                 <controls:DarkTimePicker x:Name="TravelWorkTimeBox" Text="00:00" MaxHour="72"/>
+                                <TextBlock x:Name="WorkCountryLabel" Text="Land"/>
+                                <ComboBox x:Name="WorkCountryCombo"
+                                          IsTextSearchEnabled="True"
+                                          MaxDropDownHeight="320"
+                                          SelectionChanged="WorkLocationContext_Changed"/>
                                 <TextBlock x:Name="WorkLocationLabel" Text="Ort / Einsatzort"/>
-                                <TextBox x:Name="WorkLocationBox" Text=""/>
+                                <TextBox x:Name="WorkLocationBox"
+                                         Text=""
+                                         LostFocus="WorkLocationContext_Changed"/>
                                 <TextBlock Text="Notiz"/>
                                 <TextBox x:Name="WorkNoteBox" Height="70" TextWrapping="Wrap" AcceptsReturn="True"/>
                                 <WrapPanel>
@@ -367,6 +374,7 @@
                                             </DataGridTextColumn>
                                             <DataGridTextColumn Header="Reisezeit" Binding="{Binding TravelWorkTimeText}" Width="95"/>
                                             <DataGridCheckBoxColumn Header="Reise" Binding="{Binding IsTravelDay}" Width="65"/>
+                                            <DataGridTextColumn Header="Land" Binding="{Binding CountryName}" Width="130"/>
                                             <DataGridTextColumn Header="Ort" Binding="{Binding Location}" Width="*"/>
                                         </DataGrid.Columns>
                                     </DataGrid>
@@ -454,6 +462,78 @@
                                 </UniformGrid>
 
                                 <TextBlock x:Name="ReportDetailsText" FontSize="15" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"/>
+
+                                <Border Height="1" Background="{StaticResource BorderBrushSoft}" Margin="0,24,0,20"/>
+
+                                <TextBlock Text="Arbeitsorte" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                <TextBlock Text="Reguläre Arbeitstage nach Land und Einsatzort, jeweils für den gewählten Monat und das gesamte Jahr."
+                                           Foreground="{StaticResource MutedBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,14"/>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="16"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Grid Grid.Column="0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="220"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="Nach Land" FontSize="15" FontWeight="SemiBold"/>
+                                        <TextBlock x:Name="CountryReportSummaryText"
+                                                   Grid.Row="1"
+                                                   Foreground="{StaticResource MutedBrush}"
+                                                   FontSize="12"
+                                                   Margin="0,3,0,8"/>
+                                        <DataGrid x:Name="CountryReportGrid"
+                                                  Grid.Row="2"
+                                                  AutoGenerateColumns="False"
+                                                  IsReadOnly="True"
+                                                  HeadersVisibility="Column"
+                                                  SelectionMode="Single">
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn Header="Land" Binding="{Binding Name}" Width="*"/>
+                                                <DataGridTextColumn Header="Monat Tage" Binding="{Binding MonthDayCountText}" Width="82"/>
+                                                <DataGridTextColumn Header="Monat Ist" Binding="{Binding MonthActualWorkTimeText}" Width="92"/>
+                                                <DataGridTextColumn Header="Jahr Tage" Binding="{Binding YearDayCountText}" Width="76"/>
+                                                <DataGridTextColumn Header="Jahr Ist" Binding="{Binding YearActualWorkTimeText}" Width="92"/>
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </Grid>
+
+                                    <Grid Grid.Column="2">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="220"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="Nach Einsatzort" FontSize="15" FontWeight="SemiBold"/>
+                                        <TextBlock x:Name="LocationReportSummaryText"
+                                                   Grid.Row="1"
+                                                   Foreground="{StaticResource MutedBrush}"
+                                                   FontSize="12"
+                                                   Margin="0,3,0,8"/>
+                                        <DataGrid x:Name="LocationReportGrid"
+                                                  Grid.Row="2"
+                                                  AutoGenerateColumns="False"
+                                                  IsReadOnly="True"
+                                                  HeadersVisibility="Column"
+                                                  SelectionMode="Single">
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn Header="Einsatzort" Binding="{Binding Name}" Width="*"/>
+                                                <DataGridTextColumn Header="Monat Tage" Binding="{Binding MonthDayCountText}" Width="82"/>
+                                                <DataGridTextColumn Header="Monat Ist" Binding="{Binding MonthActualWorkTimeText}" Width="92"/>
+                                                <DataGridTextColumn Header="Jahr Tage" Binding="{Binding YearDayCountText}" Width="76"/>
+                                                <DataGridTextColumn Header="Jahr Ist" Binding="{Binding YearActualWorkTimeText}" Width="92"/>
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </Grid>
+                                </Grid>
                             </StackPanel>
                         </ScrollViewer>
                     </Border>
@@ -477,8 +557,14 @@
                                 <TextBlock Text="Standard-Startort"/>
                                 <TextBox x:Name="SettingsDefaultDepartureLocationBox"/>
 
-                                <TextBlock Text="Bundesland für Feiertage"/>
-                                <ComboBox x:Name="SettingsFederalStateCombo"/>
+                                <TextBlock Text="Region für Feiertage"/>
+                                <ComboBox x:Name="SettingsHolidayRegionCombo"
+                                          SelectionChanged="SettingsHolidayRegionCombo_SelectionChanged"/>
+                                <TextBlock x:Name="SettingsHolidayRegionHintText"
+                                           Foreground="{StaticResource MutedBrush}"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Margin="0,-8,0,12"/>
 
                                 <TextBlock Text="Standard-Arbeitsbeginn HH:mm"/>
                                 <controls:DarkTimePicker x:Name="SettingsDefaultWorkStartBox" MaxHour="23"/>
@@ -508,6 +594,20 @@
                                     <Button Content="Standardwerte anwenden" Background="{StaticResource CardBrush2}" BorderBrush="{StaticResource BorderBrushSoft}" Click="ApplySettingsDefaults_Click"/>
                                     <Button Content="Nach Updates suchen" Background="{StaticResource CardBrush2}" BorderBrush="{StaticResource BorderBrushSoft}" Click="CheckForUpdates_Click"/>
                                 </WrapPanel>
+
+                                <Border Height="1"
+                                        Background="{StaticResource BorderBrushSoft}"
+                                        Margin="0,20,0,18"/>
+                                <TextBlock Text="Feiertagsverwaltung"
+                                           FontSize="18"
+                                           FontWeight="SemiBold"/>
+                                <TextBlock x:Name="HolidayRulesSummaryText"
+                                           Foreground="{StaticResource MutedBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,4,0,4"/>
+                                <Button Content="Feiertage verwalten"
+                                        HorizontalAlignment="Left"
+                                        Click="ManageHolidayRules_Click"/>
 
                                 <TextBlock x:Name="SettingsInfoText"
                                            TextWrapping="Wrap"

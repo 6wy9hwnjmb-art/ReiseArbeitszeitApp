@@ -70,7 +70,7 @@
                               Margin="0,0,24,0"
                               Checked="PreviewInput_Changed"
                               Unchecked="PreviewInput_Changed"/>
-                    <TextBlock x:Name="FederalStateText"
+                    <TextBlock x:Name="HolidayRegionText"
                                Foreground="{StaticResource MutedBrush}"
                                VerticalAlignment="Center"/>
                 </WrapPanel>

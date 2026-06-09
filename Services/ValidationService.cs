@@ -32,6 +32,8 @@ public class ValidationService
             warnings.Add($"Für den {day.Date:dd.MM.yyyy} existiert bereits ein Arbeitstag.");
         if (!day.IsAbsence && string.IsNullOrWhiteSpace(day.Location))
             warnings.Add("Ort / Einsatzort ist leer.");
+        if (!day.IsAbsence && string.IsNullOrWhiteSpace(day.CountryCode))
+            warnings.Add("Für den Arbeitsort ist kein Land ausgewählt.");
         if (!day.IsAbsence && day.EndTime < day.StartTime)
             warnings.Add("Das Arbeitsende liegt vor dem Beginn. Das wird als Nachtschicht über Mitternacht gerechnet.");
         if (!day.IsAbsence && day.BreakTime > day.GrossTime)

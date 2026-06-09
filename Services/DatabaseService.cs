@@ -8,7 +8,7 @@ namespace ReiseArbeitszeitApp.Services;
 
 public class DatabaseService
 {
-    public const int LatestSchemaVersion = 2;
+    public const int LatestSchemaVersion = 4;
 
     private readonly string _dbPath;
     private readonly string _connectionString;
@@ -105,6 +105,12 @@ public class DatabaseService
                 case 2:
                     ApplyMigrationV2(connection, transaction);
                     break;
+                case 3:
+                    ApplyMigrationV3(connection, transaction);
+                    break;
+                case 4:
+                    ApplyMigrationV4(connection, transaction);
+                    break;
                 default:
                     throw new InvalidOperationException($"Unbekannte Datenbankmigration v{version}.");
             }
@@ -193,6 +199,41 @@ public class DatabaseService
             """);
     }
 
+    private static void ApplyMigrationV3(SqliteConnection connection, SqliteTransaction transaction)
+    {
+        ExecuteNonQuery(connection, transaction, """
+            ALTER TABLE WorkDays
+            ADD COLUMN CountryCode TEXT NOT NULL DEFAULT '';
+            """);
+
+        ExecuteNonQuery(connection, transaction, """
+            CREATE INDEX IF NOT EXISTS IX_WorkDays_CountryCode
+            ON WorkDays (CountryCode);
+            """);
+    }
+
+    private static void ApplyMigrationV4(SqliteConnection connection, SqliteTransaction transaction)
+    {
+        ExecuteNonQuery(connection, transaction, """
+            CREATE TABLE HolidayRules (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Kind TEXT NOT NULL,
+                Name TEXT NOT NULL,
+                Date TEXT NOT NULL,
+                IsRecurring INTEGER NOT NULL,
+                Scope TEXT NOT NULL,
+                RegionCode TEXT NOT NULL,
+                CountryCode TEXT NOT NULL,
+                Location TEXT NOT NULL
+            );
+            """);
+
+        ExecuteNonQuery(connection, transaction, """
+            CREATE INDEX IX_HolidayRules_Date
+            ON HolidayRules (Date);
+            """);
+    }
+
     private string CreateMigrationBackup(int fromVersion, int toVersion)
     {
         var databaseFolder = Path.GetDirectoryName(_dbPath)
@@ -236,8 +277,8 @@ public class DatabaseService
                 using var command = connection.CreateCommand();
                 command.Transaction = transaction;
                 command.CommandText = """
-                    INSERT INTO WorkDays (Date, DayType, StartTime, EndTime, BreakTime, TargetTime, Location, Note, IsTravelDay, TravelWorkTime)
-                    VALUES ($Date, $DayType, $StartTime, $EndTime, $BreakTime, $TargetTime, $Location, $Note, $IsTravelDay, $TravelWorkTime);
+                    INSERT INTO WorkDays (Date, DayType, StartTime, EndTime, BreakTime, TargetTime, CountryCode, Location, Note, IsTravelDay, TravelWorkTime)
+                    VALUES ($Date, $DayType, $StartTime, $EndTime, $BreakTime, $TargetTime, $CountryCode, $Location, $Note, $IsTravelDay, $TravelWorkTime);
                     """;
                 command.Parameters.AddWithValue("$Date", day.Date.ToString("yyyy-MM-dd"));
                 command.Parameters.AddWithValue("$DayType", day.DayType.ToString());
@@ -245,6 +286,7 @@ public class DatabaseService
                 command.Parameters.AddWithValue("$EndTime", day.EndTime.ToString());
                 command.Parameters.AddWithValue("$BreakTime", day.BreakTime.ToString());
                 command.Parameters.AddWithValue("$TargetTime", day.TargetTime.ToString());
+                command.Parameters.AddWithValue("$CountryCode", day.CountryCode);
                 command.Parameters.AddWithValue("$Location", day.Location);
                 command.Parameters.AddWithValue("$Note", day.Note);
                 command.Parameters.AddWithValue("$IsTravelDay", day.IsTravelDay ? 1 : 0);
@@ -271,8 +313,8 @@ public class DatabaseService
 
         using var command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO WorkDays (Date, DayType, StartTime, EndTime, BreakTime, TargetTime, Location, Note, IsTravelDay, TravelWorkTime)
-            VALUES ($Date, $DayType, $StartTime, $EndTime, $BreakTime, $TargetTime, $Location, $Note, $IsTravelDay, $TravelWorkTime);
+            INSERT INTO WorkDays (Date, DayType, StartTime, EndTime, BreakTime, TargetTime, CountryCode, Location, Note, IsTravelDay, TravelWorkTime)
+            VALUES ($Date, $DayType, $StartTime, $EndTime, $BreakTime, $TargetTime, $CountryCode, $Location, $Note, $IsTravelDay, $TravelWorkTime);
             """;
         command.Parameters.AddWithValue("$Date", day.Date.ToString("yyyy-MM-dd"));
         command.Parameters.AddWithValue("$DayType", day.DayType.ToString());
@@ -280,6 +322,7 @@ public class DatabaseService
         command.Parameters.AddWithValue("$EndTime", day.EndTime.ToString());
         command.Parameters.AddWithValue("$BreakTime", day.BreakTime.ToString());
         command.Parameters.AddWithValue("$TargetTime", day.TargetTime.ToString());
+        command.Parameters.AddWithValue("$CountryCode", day.CountryCode);
         command.Parameters.AddWithValue("$Location", day.Location);
         command.Parameters.AddWithValue("$Note", day.Note);
         command.Parameters.AddWithValue("$IsTravelDay", day.IsTravelDay ? 1 : 0);
@@ -304,6 +347,7 @@ public class DatabaseService
                 EndTime = $EndTime,
                 BreakTime = $BreakTime,
                 TargetTime = $TargetTime,
+                CountryCode = $CountryCode,
                 Location = $Location,
                 Note = $Note,
                 IsTravelDay = $IsTravelDay,
@@ -317,6 +361,7 @@ public class DatabaseService
         command.Parameters.AddWithValue("$EndTime", day.EndTime.ToString());
         command.Parameters.AddWithValue("$BreakTime", day.BreakTime.ToString());
         command.Parameters.AddWithValue("$TargetTime", day.TargetTime.ToString());
+        command.Parameters.AddWithValue("$CountryCode", day.CountryCode);
         command.Parameters.AddWithValue("$Location", day.Location);
         command.Parameters.AddWithValue("$Note", day.Note);
         command.Parameters.AddWithValue("$IsTravelDay", day.IsTravelDay ? 1 : 0);
@@ -402,6 +447,93 @@ public class DatabaseService
         DeleteById("Trips", id);
     }
 
+    public void SaveHolidayRule(HolidayRule rule)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        using var command = connection.CreateCommand();
+
+        if (rule.Id > 0)
+        {
+            command.CommandText = """
+                UPDATE HolidayRules
+                SET Kind = $Kind,
+                    Name = $Name,
+                    Date = $Date,
+                    IsRecurring = $IsRecurring,
+                    Scope = $Scope,
+                    RegionCode = $RegionCode,
+                    CountryCode = $CountryCode,
+                    Location = $Location
+                WHERE Id = $Id;
+                """;
+            command.Parameters.AddWithValue("$Id", rule.Id);
+        }
+        else
+        {
+            command.CommandText = """
+                INSERT INTO HolidayRules (
+                    Kind, Name, Date, IsRecurring, Scope, RegionCode, CountryCode, Location)
+                VALUES (
+                    $Kind, $Name, $Date, $IsRecurring, $Scope, $RegionCode, $CountryCode, $Location);
+                """;
+        }
+
+        command.Parameters.AddWithValue("$Kind", rule.Kind.ToString());
+        command.Parameters.AddWithValue("$Name", rule.Name.Trim());
+        command.Parameters.AddWithValue("$Date", rule.Date.ToString("yyyy-MM-dd"));
+        command.Parameters.AddWithValue("$IsRecurring", rule.IsRecurring ? 1 : 0);
+        command.Parameters.AddWithValue("$Scope", rule.Scope.ToString());
+        command.Parameters.AddWithValue("$RegionCode", rule.RegionCode.Trim());
+        command.Parameters.AddWithValue("$CountryCode", rule.CountryCode.Trim().ToUpperInvariant());
+        command.Parameters.AddWithValue("$Location", rule.Location.Trim());
+        command.ExecuteNonQuery();
+
+        if (rule.Id == 0)
+        {
+            command.CommandText = "SELECT last_insert_rowid();";
+            command.Parameters.Clear();
+            rule.Id = Convert.ToInt32((long)command.ExecuteScalar()!);
+        }
+    }
+
+    public List<HolidayRule> GetHolidayRules()
+    {
+        var rules = new List<HolidayRule>();
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT * FROM HolidayRules ORDER BY Date, Name;";
+        using var reader = command.ExecuteReader();
+
+        while (reader.Read())
+        {
+            rules.Add(new HolidayRule
+            {
+                Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                Kind = ParseEnum(
+                    reader.GetString(reader.GetOrdinal("Kind")),
+                    HolidayRuleKind.CustomHoliday),
+                Name = reader.GetString(reader.GetOrdinal("Name")),
+                Date = DateTime.Parse(reader.GetString(reader.GetOrdinal("Date"))),
+                IsRecurring = reader.GetInt32(reader.GetOrdinal("IsRecurring")) == 1,
+                Scope = ParseEnum(
+                    reader.GetString(reader.GetOrdinal("Scope")),
+                    HolidayRuleScope.HolidayRegion),
+                RegionCode = reader.GetString(reader.GetOrdinal("RegionCode")),
+                CountryCode = reader.GetString(reader.GetOrdinal("CountryCode")),
+                Location = reader.GetString(reader.GetOrdinal("Location"))
+            });
+        }
+
+        return rules;
+    }
+
+    public void DeleteHolidayRule(int id)
+    {
+        DeleteById("HolidayRules", id);
+    }
+
     public bool HasWorkDayOnDate(DateTime date, int excludingId = 0)
     {
         using var connection = new SqliteConnection(_connectionString);
@@ -444,6 +576,7 @@ public class DatabaseService
                 EndTime = TimeSpan.Parse(reader.GetString(reader.GetOrdinal("EndTime"))),
                 BreakTime = TimeSpan.Parse(reader.GetString(reader.GetOrdinal("BreakTime"))),
                 TargetTime = TimeSpan.Parse(reader.GetString(reader.GetOrdinal("TargetTime"))),
+                CountryCode = reader.GetString(reader.GetOrdinal("CountryCode")),
                 Location = reader.GetString(reader.GetOrdinal("Location")),
                 Note = reader.GetString(reader.GetOrdinal("Note")),
                 IsTravelDay = reader.GetInt32(reader.GetOrdinal("IsTravelDay")) == 1,
@@ -508,6 +641,14 @@ public class DatabaseService
         return Enum.TryParse<WorkDayType>(value, ignoreCase: true, out var type)
             ? type
             : WorkDayType.Work;
+    }
+
+    private static TEnum ParseEnum<TEnum>(string value, TEnum fallback)
+        where TEnum : struct, Enum
+    {
+        return Enum.TryParse<TEnum>(value, ignoreCase: true, out var result)
+            ? result
+            : fallback;
     }
 
     private static void ExecuteNonQuery(

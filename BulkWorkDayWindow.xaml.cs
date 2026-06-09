@@ -11,9 +11,10 @@ public partial class BulkWorkDayWindow : Window
     private static readonly CultureInfo GermanCulture = CultureInfo.GetCultureInfo("de-DE");
 
     private readonly DatabaseService _database;
-    private readonly GermanHolidayService _holidayService;
+    private readonly HolidayService _holidayService;
     private readonly AppSettings _settings;
-    private readonly GermanFederalState _federalState;
+    private readonly HolidayRegion _holidayRegion;
+    private readonly IReadOnlyCollection<HolidayRule> _holidayRules;
     private List<BulkDayPreview> _preview = [];
     private bool _isInitialized;
 
@@ -36,13 +37,14 @@ public partial class BulkWorkDayWindow : Window
 
     public BulkWorkDayWindow(
         DatabaseService database,
-        GermanHolidayService holidayService,
+        HolidayService holidayService,
         AppSettings settings)
     {
         _database = database;
         _holidayService = holidayService;
         _settings = settings;
-        _federalState = GermanFederalStateInfo.ParseOrDefault(settings.FederalState);
+        _holidayRegion = holidayService.GetRegion(settings);
+        _holidayRules = database.GetHolidayRules();
 
         InitializeComponent();
 
@@ -59,8 +61,10 @@ public partial class BulkWorkDayWindow : Window
         StartDatePicker.SelectedDate = DateTime.Today;
         EndDatePicker.SelectedDate = DateTime.Today;
         DayTypeCombo.SelectedValue = WorkDayType.Vacation;
-        FederalStateText.Text =
-            $"Feiertage werden für {GermanFederalStateInfo.GetDisplayName(_federalState)} berücksichtigt.";
+        var regionNotice = _holidayService.GetRegionNotice(_settings);
+        HolidayRegionText.Text =
+            $"Feiertage werden für {_holidayRegion.ShortDisplayName} berücksichtigt." +
+            (string.IsNullOrWhiteSpace(regionNotice) ? string.Empty : $" {regionNotice}");
 
         _isInitialized = true;
         RefreshPreview();
@@ -130,7 +134,10 @@ public partial class BulkWorkDayWindow : Window
         WorkDayType dayType,
         HashSet<DateTime> existingDates)
     {
-        var holidayName = _holidayService.GetHolidayName(date, _federalState);
+        var holidayName = _holidayService.GetHolidayName(
+            date,
+            _settings,
+            _holidayRules);
         var isWeekend = date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
         var isSaveable = true;
         var status = "Wird gespeichert";
@@ -238,6 +245,9 @@ public partial class BulkWorkDayWindow : Window
             EndTime = isAbsence ? TimeSpan.Zero : ParseTime(_settings.DefaultWorkEnd, "Standard-Arbeitsende"),
             BreakTime = isAbsence ? TimeSpan.Zero : ParseTime(_settings.DefaultBreak, "Standard-Pause"),
             TargetTime = ParseTime(_settings.DefaultTarget, "Standard-Sollzeit"),
+            CountryCode = row.DayType == WorkDayType.HomeOffice
+                ? (_holidayRegion.Country == HolidayCountry.Switzerland ? "CH" : "DE")
+                : string.Empty,
             Location = row.DayType == WorkDayType.HomeOffice ? "Homeoffice" : string.Empty,
             Note = note,
             IsTravelDay = false,

@@ -6,8 +6,10 @@ Arbeitszeiten und Überstunden.
 ## Funktionen
 
 - Reisezeitberechnung mit automatischer Zeitzonenerkennung
-- Arbeitszeiterfassung mit Tagesarten und gesetzlichen Feiertagen
+- Arbeitszeiterfassung mit Ländern, Einsatzorten, Tagesarten und Feiertagen für deutsche Bundesländer und Schweizer Kantone
+- Eigene Feiertage, lokale Ausnahmen und deaktivierbare automatische Feiertage
 - Monatskalender und Jahresauswertung
+- Monats- und Jahresvergleich der Arbeitszeit nach Land und Einsatzort
 - Mehrtageserfassung für Urlaub, Krankheit, Homeoffice und Feiertage
 - Manuelle und tägliche automatische Datensicherungen
 - Geprüfte Wiederherstellung mit zusätzlicher Rettungskopie
@@ -42,5 +44,5 @@ aktuellen Datenstands an und prüft die ausgewählte SQLite-Datei.
 
 1. Version in `ReiseArbeitszeitApp.csproj` erhöhen.
 2. Änderungen committen.
-3. Git-Tag passend zur Projektversion erstellen, zum Beispiel `v0.2.0`, und zu GitHub übertragen.
+3. Git-Tag passend zur Projektversion erstellen, zum Beispiel `v0.2.1`, und zu GitHub übertragen.
 4. GitHub Actions erstellt und veröffentlicht EXE, ZIP und Installer.

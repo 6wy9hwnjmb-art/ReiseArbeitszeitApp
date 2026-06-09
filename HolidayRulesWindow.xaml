@@ -1,0 +1,190 @@
+<Window x:Class="ReiseArbeitszeitApp.HolidayRulesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:ReiseArbeitszeitApp.Controls"
+        Title="Feiertage verwalten"
+        Width="1180"
+        Height="760"
+        MinWidth="1040"
+        MinHeight="680"
+        Background="{StaticResource BgBrush}"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel>
+            <TextBlock Text="Feiertage verwalten" Style="{StaticResource SectionTitle}"/>
+            <TextBlock x:Name="RegionHeaderText"
+                       Foreground="{StaticResource MutedBrush}"
+                       TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="360"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Background="{StaticResource CardBrush}"
+                    BorderBrush="{StaticResource BorderBrushSoft}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Eigenen Feiertag anlegen"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,14"/>
+
+                        <TextBlock Text="Bezeichnung"/>
+                        <TextBox x:Name="RuleNameBox"/>
+
+                        <TextBlock Text="Datum"/>
+                        <controls:DarkDatePicker x:Name="RuleDatePicker"/>
+
+                        <CheckBox x:Name="RuleRecurringCheck"
+                                  Content="Jährlich wiederholen"
+                                  IsChecked="True"
+                                  Margin="0,2,0,14"/>
+
+                        <TextBlock Text="Gültigkeit"/>
+                        <ComboBox x:Name="RuleScopeCombo"
+                                  SelectionChanged="RuleScopeCombo_SelectionChanged"/>
+
+                        <TextBlock x:Name="RuleRegionLabel" Text="Bundesland / Kanton"/>
+                        <ComboBox x:Name="RuleRegionCombo"/>
+
+                        <TextBlock x:Name="RuleCountryLabel" Text="Land"/>
+                        <ComboBox x:Name="RuleCountryCombo"
+                                  IsTextSearchEnabled="True"
+                                  MaxDropDownHeight="280"/>
+
+                        <TextBlock x:Name="RuleLocationLabel" Text="Einsatzort"/>
+                        <TextBox x:Name="RuleLocationBox"/>
+
+                        <Button Content="Feiertag hinzufügen"
+                                Click="AddHolidayRule_Click"/>
+
+                        <TextBlock Text="Regeln für einen Einsatzort greifen bei exakt übereinstimmendem Land und Ortsnamen."
+                                   Foreground="{StaticResource MutedBrush}"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Margin="0,12,0,0"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="16"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <Border Background="{StaticResource CardBrush}"
+                        BorderBrush="{StaticResource BorderBrushSoft}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="18">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Text="Automatische Feiertage"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"/>
+                        <WrapPanel Grid.Row="1" Margin="0,8,0,10">
+                            <TextBlock Text="Jahr"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,0"/>
+                            <TextBox x:Name="AutomaticHolidayYearBox"
+                                     Width="82"
+                                     Margin="0,0,8,0"/>
+                            <Button Content="Anzeigen"
+                                    Margin="0"
+                                    Click="RefreshAutomaticHolidays_Click"/>
+                        </WrapPanel>
+
+                        <DataGrid x:Name="AutomaticHolidaysGrid"
+                                  Grid.Row="2"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  SelectionMode="Single">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Datum" Binding="{Binding DateText}" Width="145"/>
+                                <DataGridTextColumn Header="Feiertag" Binding="{Binding Name}" Width="360"/>
+                                <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="100"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <Button Grid.Row="3"
+                                Content="Auswahl deaktivieren"
+                                Background="{StaticResource CardBrush2}"
+                                BorderBrush="{StaticResource BorderBrushSoft}"
+                                Click="DisableAutomaticHoliday_Click"/>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="2"
+                        Background="{StaticResource CardBrush}"
+                        BorderBrush="{StaticResource BorderBrushSoft}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="18">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Text="Eigene Regeln und Ausnahmen"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"/>
+                        <TextBlock x:Name="RulesSummaryText"
+                                   Grid.Row="1"
+                                   Foreground="{StaticResource MutedBrush}"
+                                   Margin="0,4,0,10"/>
+
+                        <DataGrid x:Name="HolidayRulesGrid"
+                                  Grid.Row="2"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  SelectionMode="Single">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Datum" Binding="{Binding DateText}" Width="90"/>
+                                <DataGridTextColumn Header="Bezeichnung" Binding="{Binding Name}" Width="180"/>
+                                <DataGridTextColumn Header="Art" Binding="{Binding KindText}" Width="155"/>
+                                <DataGridTextColumn Header="Gültigkeit" Binding="{Binding ScopeText}" Width="230"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <Button Grid.Row="3"
+                                Content="Ausgewählte Regel löschen"
+                                Background="{StaticResource CardBrush2}"
+                                BorderBrush="{StaticResource BorderBrushSoft}"
+                                Click="DeleteHolidayRule_Click"/>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <Button Grid.Row="3"
+                Content="Schließen"
+                HorizontalAlignment="Right"
+                Width="110"
+                Click="Close_Click"/>
+    </Grid>
+</Window>

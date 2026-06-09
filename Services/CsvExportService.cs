@@ -27,7 +27,7 @@ public class CsvExportService
     private static void WriteWorkDays(string path, IReadOnlyCollection<WorkDay> days)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("Datum;Tagesart;Beginn;Ende;Pause;Sollzeit;Reisezeit angerechnet;Istzeit;Überstunden;Reisetag;Ort;Notiz");
+        sb.AppendLine("Datum;Tagesart;Beginn;Ende;Pause;Sollzeit;Reisezeit angerechnet;Istzeit;Überstunden;Reisetag;Land;Ort;Notiz");
 
         foreach (var day in days.OrderBy(x => x.Date))
         {
@@ -43,6 +43,7 @@ public class CsvExportService
                 TimeFormatter.FormatDuration(day.ActualWorkTime),
                 TimeFormatter.FormatSignedDuration(day.Overtime),
                 day.IsTravelDay ? "Ja" : "Nein",
+                Escape(string.IsNullOrWhiteSpace(day.CountryCode) ? string.Empty : day.CountryName),
                 Escape(day.Location),
                 Escape(day.Note)
             }));

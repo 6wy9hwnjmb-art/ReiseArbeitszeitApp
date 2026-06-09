@@ -12,6 +12,7 @@ public class WorkDay
     public TimeSpan EndTime { get; set; } = new(16, 0, 0);
     public TimeSpan BreakTime { get; set; } = new(0, 30, 0);
     public TimeSpan TargetTime { get; set; } = new(8, 0, 0);
+    public string CountryCode { get; set; } = string.Empty;
     public string Location { get; set; } = string.Empty;
     public string Note { get; set; } = string.Empty;
     public bool IsTravelDay { get; set; }
@@ -26,6 +27,7 @@ public class WorkDay
     public string ActualWorkTimeText => TimeFormatter.FormatDuration(ActualWorkTime);
     public string OvertimeText => TimeFormatter.FormatSignedDuration(Overtime);
     public string TravelWorkTimeText => TimeFormatter.FormatDuration(TravelWorkTime);
+    public string CountryName => CountryCatalog.GetDisplayName(CountryCode);
 
     public TimeSpan GrossTime
     {
