@@ -46,7 +46,7 @@ public static class CountryCatalog
             .Select(group => group.First())
             .Select(region => new CountryOption(
                 region.TwoLetterISORegionName.ToUpperInvariant(),
-                region.DisplayName))
+                GetCountryName(region)))
             .OrderBy(country => country.Name, StringComparer.Create(
                 CultureInfo.GetCultureInfo("de-DE"),
                 ignoreCase: true))
@@ -54,6 +54,13 @@ public static class CountryCatalog
 
         countries.Insert(0, new CountryOption(string.Empty, "Nicht angegeben"));
         return countries;
+    }
+
+    private static string GetCountryName(RegionInfo region)
+    {
+        return region.TwoLetterISORegionName.Equals("US", StringComparison.OrdinalIgnoreCase)
+            ? "USA / Vereinigte Staaten"
+            : region.DisplayName;
     }
 
     private static RegionInfo? TryCreateRegion(CultureInfo culture)

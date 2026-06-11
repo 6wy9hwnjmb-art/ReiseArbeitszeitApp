@@ -579,7 +579,22 @@
                                 <controls:DarkTimePicker x:Name="SettingsDefaultTargetBox" MaxHour="24"/>
 
                                 <TextBlock Text="CSV-Exportordner"/>
-                                <TextBox x:Name="SettingsCsvExportFolderBox"/>
+                                <Grid Margin="0,4,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="SettingsCsvExportFolderBox"
+                                             Margin="0"
+                                             VerticalContentAlignment="Center"/>
+                                    <Button Grid.Column="1"
+                                            Content="Ordner auswählen"
+                                            Margin="8,0,0,0"
+                                            Padding="14,8"
+                                            VerticalAlignment="Stretch"
+                                            ToolTip="Speicherort für CSV-Dateien auswählen"
+                                            Click="SelectCsvExportFolder_Click"/>
+                                </Grid>
 
                                 <CheckBox x:Name="SettingsCheckUpdatesBox"
                                           Content="Beim Start automatisch nach Updates suchen"

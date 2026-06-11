@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -817,6 +818,29 @@ public partial class MainWindow : Window
         {
             ShowError(ex.Message);
         }
+    }
+
+    private void SelectCsvExportFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var currentFolder = SettingsCsvExportFolderBox.Text.Trim();
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "CSV-Exportordner auswählen",
+            Multiselect = false
+        };
+
+        if (Directory.Exists(currentFolder))
+        {
+            dialog.InitialDirectory = currentFolder;
+        }
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        SettingsCsvExportFolderBox.Text = dialog.FolderName;
+        StatusText.Text = "CSV-Exportordner ausgewählt. Bitte Einstellungen speichern.";
     }
 
     private void ApplySettingsDefaults_Click(object sender, RoutedEventArgs e)
