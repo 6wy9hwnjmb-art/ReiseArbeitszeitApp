@@ -65,4 +65,4 @@ jobs:
             ".\publish\ReiseArbeitszeitApp-$version-win-x64.zip" `
             ".\publish\win-x64-v$version\ReiseArbeitszeitApp.exe" `
             --title "Reise- und Arbeitszeitrechner $version" `
-            --generate-notes
+            --notes-file ".\RELEASE_NOTES_$version.md"

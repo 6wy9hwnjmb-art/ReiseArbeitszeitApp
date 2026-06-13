@@ -138,6 +138,8 @@ public class DarkTimePicker : UserControl
         set => SetValue(MinuteStepProperty, value);
     }
 
+    public event EventHandler? TextChanged;
+
     private static void OnTextChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is not DarkTimePicker picker || picker._isUpdating)
@@ -145,6 +147,7 @@ public class DarkTimePicker : UserControl
 
         picker.UpdateTextBox();
         picker.SyncWheelSelection();
+        picker.TextChanged?.Invoke(picker, EventArgs.Empty);
     }
 
     private static void OnPickerOptionsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -370,6 +373,7 @@ public class DarkTimePicker : UserControl
         _textBox.Text = value;
         _isUpdating = false;
         SyncWheelSelection();
+        TextChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private static bool TryParseTime(string? text, out int hours, out int minutes)

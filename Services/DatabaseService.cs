@@ -586,6 +586,30 @@ public class DatabaseService
         return result;
     }
 
+    public List<string> GetWorkLocations(string? countryCode = null)
+    {
+        var normalizedCountryCode = countryCode?.Trim().ToUpperInvariant() ?? string.Empty;
+        var result = new List<string>();
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT Location
+            FROM WorkDays
+            WHERE TRIM(Location) <> ''
+              AND ($CountryCode = '' OR UPPER(CountryCode) = $CountryCode)
+            GROUP BY Location COLLATE NOCASE
+            ORDER BY MAX(Date) DESC, MAX(Id) DESC;
+            """;
+        command.Parameters.AddWithValue("$CountryCode", normalizedCountryCode);
+
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+            result.Add(reader.GetString(0));
+
+        return result;
+    }
+
     public List<TripEntry> GetTrips(int? year = null)
     {
         var result = new List<TripEntry>();

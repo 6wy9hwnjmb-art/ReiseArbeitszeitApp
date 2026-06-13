@@ -21,3 +21,6 @@ jobs:
 
       - name: Build
         run: dotnet build .\ReiseArbeitszeitApp.csproj -c Release
+
+      - name: Sync-API bauen
+        run: dotnet build .\ReiseArbeitszeitApp.SyncApi\ReiseArbeitszeitApp.SyncApi.csproj -c Release

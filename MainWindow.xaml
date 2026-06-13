@@ -2,30 +2,51 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:ReiseArbeitszeitApp.Controls"
-        Title="Reise- &amp; Arbeitszeitrechner" Height="820" Width="1180"
+        Title="Reise- &amp; Arbeitszeitrechner" Height="850" Width="1240"
         MinHeight="720" MinWidth="1050"
         Icon="Assets/app-icon.ico"
         Background="{StaticResource BgBrush}" WindowStartupLocation="CenterScreen">
-    <Grid Margin="24">
+    <Grid Margin="22,18,22,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <StackPanel Margin="0,0,0,18">
-            <TextBlock Text="Reise- &amp; Arbeitszeitrechner" FontSize="30" FontWeight="Bold"/>
-            <TextBlock Text="Berechnung von Reisezeit, Zeitverschiebung, Arbeitszeit und Überstunden"
-                       Foreground="{StaticResource MutedBrush}" FontSize="15"/>
-            <TextBlock x:Name="AppVersionText" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,6,0,0"/>
-        </StackPanel>
+        <Grid Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="Reise- &amp; Arbeitszeitrechner"
+                           FontFamily="Segoe UI Variable Display, Segoe UI"
+                           FontSize="24"
+                           FontWeight="SemiBold"/>
+                <TextBlock Text="Reisen, Arbeitszeiten und Überstunden"
+                           Foreground="{StaticResource MutedBrush}"
+                           FontSize="13"
+                           Margin="0,3,0,0"/>
+            </StackPanel>
+            <Border Grid.Column="1"
+                    Background="{StaticResource CardBrush2}"
+                    BorderBrush="{StaticResource BorderBrushSoft}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="10,5"
+                    VerticalAlignment="Center">
+                <TextBlock x:Name="AppVersionText"
+                           Foreground="{StaticResource MutedBrush}"
+                           FontSize="11"/>
+            </Border>
+        </Grid>
 
         <TabControl x:Name="MainTabs" Grid.Row="1" FontSize="14">
             <TabItem Header="Reisezeit">
-                <Grid Margin="0,16,0,0">
+                <Grid Margin="0,12,0,0">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="390"/>
-                        <ColumnDefinition Width="18"/>
+                        <ColumnDefinition Width="410"/>
+                        <ColumnDefinition Width="20"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
@@ -60,7 +81,10 @@
                                 <TextBox x:Name="TripNoteBox" Height="60" TextWrapping="Wrap" AcceptsReturn="True"/>
 
                                 <WrapPanel>
-                                    <Button Content="Berechnen" Click="CalculateTrip_Click"/>
+                                    <Button Content="Berechnen"
+                                            Background="{StaticResource CardBrush2}"
+                                            BorderBrush="{StaticResource BorderBrushSoft}"
+                                            Click="CalculateTrip_Click"/>
                                     <Button x:Name="SaveTripButton" Content="Berechnen &amp; speichern" Click="SaveTrip_Click"/>
                                     <Button Content="Neu" Background="{StaticResource CardBrush2}" BorderBrush="{StaticResource BorderBrushSoft}" Click="NewTrip_Click"/>
                                 </WrapPanel>
@@ -105,10 +129,10 @@
             </TabItem>
 
             <TabItem Header="Arbeitszeit">
-                <Grid Margin="0,16,0,0">
+                <Grid Margin="0,12,0,0">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="390"/>
-                        <ColumnDefinition Width="18"/>
+                        <ColumnDefinition Width="410"/>
+                        <ColumnDefinition Width="20"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
@@ -122,22 +146,37 @@
                                 <WrapPanel Margin="0,-4,0,10">
                                     <Button Content="Heute" Background="{StaticResource CardBrush2}" BorderBrush="{StaticResource BorderBrushSoft}" Click="SetWorkDateToday_Click"/>
                                     <Button Content="Gestern" Background="{StaticResource CardBrush2}" BorderBrush="{StaticResource BorderBrushSoft}" Click="SetWorkDateYesterday_Click"/>
-                                    <Button Content="Standardtag speichern" Click="SaveStandardWorkDay_Click"/>
+                                    <Button Content="Standardtag speichern"
+                                            Background="{StaticResource CardBrush2}"
+                                            BorderBrush="{StaticResource BorderBrushSoft}"
+                                            Click="SaveStandardWorkDay_Click"/>
                                     <Button Content="Zeitraum erfassen" Background="{StaticResource CardBrush2}" BorderBrush="{StaticResource BorderBrushSoft}" Click="OpenBulkWorkDay_Click"/>
                                 </WrapPanel>
                                 <TextBlock Text="Tagesart"/>
                                 <ComboBox x:Name="WorkDayTypeCombo" SelectionChanged="WorkDayTypeCombo_SelectionChanged"/>
                                 <TextBlock x:Name="WorkHolidayHintText" Foreground="{StaticResource MutedBrush}"
                                            TextWrapping="Wrap" Margin="0,-4,0,10"/>
-                                <TextBlock Text="Beginn HH:mm"/>
-                                <controls:DarkTimePicker x:Name="WorkStartBox" Text="07:00" MaxHour="23"/>
-                                <TextBlock Text="Ende HH:mm"/>
+                                <TextBlock x:Name="WorkStartLabel" Text="Beginn HH:mm"/>
+                                <controls:DarkTimePicker x:Name="WorkStartBox"
+                                                         Text="07:00"
+                                                         MaxHour="23"
+                                                         TextChanged="WorkStartBox_TextChanged"/>
+                                <TextBlock x:Name="WorkEndLabel" Text="Ende HH:mm · automatisch"/>
                                 <controls:DarkTimePicker x:Name="WorkEndBox" Text="16:00" MaxHour="23"/>
-                                <TextBlock Text="Pause HH:mm"/>
-                                <controls:DarkTimePicker x:Name="BreakBox" Text="00:30" MaxHour="24"/>
-                                <TextBlock Text="Sollzeit HH:mm"/>
-                                <controls:DarkTimePicker x:Name="TargetBox" Text="08:00" MaxHour="24"/>
-                                <CheckBox x:Name="IsTravelDayCheck" Content="Reisetag" Foreground="{StaticResource TextBrush}" Margin="0,4,0,10"/>
+                                <controls:DarkTimePicker x:Name="BreakBox"
+                                                         Text="00:30"
+                                                         MaxHour="24"
+                                                         Visibility="Collapsed"/>
+                                <controls:DarkTimePicker x:Name="TargetBox"
+                                                         Text="08:00"
+                                                         MaxHour="24"
+                                                         Visibility="Collapsed"/>
+                                <CheckBox x:Name="IsTravelDayCheck"
+                                          Content="Reisetag"
+                                          Foreground="{StaticResource TextBrush}"
+                                          Margin="0,4,0,10"
+                                          Checked="IsTravelDayCheck_Changed"
+                                          Unchecked="IsTravelDayCheck_Changed"/>
                                 <TextBlock x:Name="TravelWorkTimeLabel" Text="angerechnete Reisezeit HH:mm"/>
                                 <controls:DarkTimePicker x:Name="TravelWorkTimeBox" Text="00:00" MaxHour="72"/>
                                 <TextBlock x:Name="WorkCountryLabel" Text="Land"/>
@@ -146,13 +185,19 @@
                                           MaxDropDownHeight="320"
                                           SelectionChanged="WorkLocationContext_Changed"/>
                                 <TextBlock x:Name="WorkLocationLabel" Text="Ort / Einsatzort"/>
-                                <TextBox x:Name="WorkLocationBox"
-                                         Text=""
-                                         LostFocus="WorkLocationContext_Changed"/>
+                                <ComboBox x:Name="WorkLocationBox"
+                                          IsEditable="True"
+                                          IsTextSearchEnabled="True"
+                                          StaysOpenOnEdit="True"
+                                          MaxDropDownHeight="260"
+                                          LostFocus="WorkLocationContext_Changed"/>
                                 <TextBlock Text="Notiz"/>
                                 <TextBox x:Name="WorkNoteBox" Height="70" TextWrapping="Wrap" AcceptsReturn="True"/>
                                 <WrapPanel>
-                                    <Button Content="Arbeitszeit prüfen" Click="PreviewWorkDay_Click"/>
+                                    <Button Content="Arbeitszeit prüfen"
+                                            Background="{StaticResource CardBrush2}"
+                                            BorderBrush="{StaticResource BorderBrushSoft}"
+                                            Click="PreviewWorkDay_Click"/>
                                     <Button x:Name="SaveWorkDayButton" Content="Speichern" Click="SaveWorkDay_Click"/>
                                     <Button Content="Neu" Background="{StaticResource CardBrush2}" BorderBrush="{StaticResource BorderBrushSoft}" Click="NewWorkDay_Click"/>
                                 </WrapPanel>
@@ -386,7 +431,7 @@
             </TabItem>
 
             <TabItem Header="Auswertung">
-                <Grid Margin="0,16,0,0">
+                <Grid Margin="0,12,0,0">
                     <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource BorderBrushSoft}"
                             BorderThickness="1" CornerRadius="8" Padding="24">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -541,7 +586,7 @@
             </TabItem>
 
             <TabItem Header="Einstellungen">
-                <Grid Margin="0,16,0,0">
+                <Grid Margin="0,12,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="510"/>
                         <ColumnDefinition Width="18"/>
@@ -569,14 +614,16 @@
                                 <TextBlock Text="Standard-Arbeitsbeginn HH:mm"/>
                                 <controls:DarkTimePicker x:Name="SettingsDefaultWorkStartBox" MaxHour="23"/>
 
-                                <TextBlock Text="Standard-Arbeitsende HH:mm"/>
-                                <controls:DarkTimePicker x:Name="SettingsDefaultWorkEndBox" MaxHour="23"/>
-
                                 <TextBlock Text="Standard-Pause HH:mm"/>
                                 <controls:DarkTimePicker x:Name="SettingsDefaultBreakBox" MaxHour="24"/>
 
                                 <TextBlock Text="Standard-Sollzeit HH:mm"/>
                                 <controls:DarkTimePicker x:Name="SettingsDefaultTargetBox" MaxHour="24"/>
+                                <TextBlock Text="Wird bei neuen Arbeitstagen automatisch als Sollzeit übernommen."
+                                           Foreground="{StaticResource MutedBrush}"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Margin="0,-8,0,12"/>
 
                                 <TextBlock Text="CSV-Exportordner"/>
                                 <Grid Margin="0,4,0,12">
@@ -709,6 +756,16 @@
             </TabItem>
         </TabControl>
 
-        <TextBlock Grid.Row="2" x:Name="StatusText" Foreground="{StaticResource MutedBrush}" Margin="0,12,0,0"/>
+        <Border Grid.Row="2"
+                Background="{StaticResource CardBrush}"
+                BorderBrush="{StaticResource BorderBrushSoft}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="12,8"
+                Margin="0,12,0,0">
+            <TextBlock x:Name="StatusText"
+                       Foreground="{StaticResource MutedBrush}"
+                       FontSize="12"/>
+        </Border>
     </Grid>
 </Window>

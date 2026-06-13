@@ -143,6 +143,7 @@ public partial class MainWindow : Window
         var workDays = _database.GetWorkDays();
         WorkDaysGrid.ItemsSource = workDays.Take(100).ToList();
         TripsGrid.ItemsSource = _database.GetTrips().Take(100).ToList();
+        RefreshWorkLocationOptions();
         RefreshWorkCalendar(workDays);
         UpdateWorkDashboard();
     }
@@ -464,6 +465,8 @@ public partial class MainWindow : Window
             LoadLists();
             RefreshReport();
             ResetWorkDayEditState();
+            BreakBox.Text = _settings.DefaultBreak;
+            TargetBox.Text = _settings.DefaultTarget;
             StatusText.Text = wasEditing ? "Arbeitstag aktualisiert." : "Arbeitstag gespeichert.";
         }
         catch (Exception ex)
@@ -580,6 +583,7 @@ public partial class MainWindow : Window
 
         var dayType = GetSelectedWorkDayType();
         var isAbsence = dayType is WorkDayType.Vacation or WorkDayType.Sick or WorkDayType.Holiday;
+        var isTravelDay = !isAbsence && IsTravelDayCheck.IsChecked == true;
 
         return new WorkDay
         {
@@ -590,8 +594,10 @@ public partial class MainWindow : Window
             EndTime = isAbsence ? TimeSpan.Zero : ParseTime(WorkEndBox.Text, "Ende"),
             BreakTime = isAbsence ? TimeSpan.Zero : ParseTime(BreakBox.Text, "Pause"),
             TargetTime = ParseTime(TargetBox.Text, "Sollzeit"),
-            IsTravelDay = !isAbsence && IsTravelDayCheck.IsChecked == true,
-            TravelWorkTime = isAbsence ? TimeSpan.Zero : ParseTime(TravelWorkTimeBox.Text, "angerechnete Reisezeit"),
+            IsTravelDay = isTravelDay,
+            TravelWorkTime = isTravelDay
+                ? ParseTime(TravelWorkTimeBox.Text, "angerechnete Reisezeit")
+                : TimeSpan.Zero,
             CountryCode = isAbsence ? string.Empty : GetSelectedWorkCountryCode(),
             Location = isAbsence ? string.Empty : WorkLocationBox.Text.Trim(),
             Note = WorkNoteBox.Text.Trim()
@@ -615,6 +621,7 @@ public partial class MainWindow : Window
         WorkLocationBox.Text = day.Location;
         WorkNoteBox.Text = day.Note;
         _isUpdatingWorkDayForm = false;
+        RefreshWorkLocationOptions();
         ApplyWorkDayTypeToForm(resetValues: false);
         UpdateHolidayHint(selectHoliday: false);
         RefreshWorkCalendar();
@@ -633,15 +640,16 @@ public partial class MainWindow : Window
         _workCalendarMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
         WorkDayTypeCombo.SelectedValue = WorkDayType.Work;
         WorkStartBox.Text = _settings.DefaultWorkStart;
-        WorkEndBox.Text = _settings.DefaultWorkEnd;
         BreakBox.Text = _settings.DefaultBreak;
         TargetBox.Text = _settings.DefaultTarget;
+        UpdateCalculatedWorkEnd();
         IsTravelDayCheck.IsChecked = false;
         TravelWorkTimeBox.Text = "00:00";
         WorkCountryCombo.SelectedValue = GetDefaultWorkCountryCode();
         WorkLocationBox.Text = string.Empty;
         WorkNoteBox.Text = string.Empty;
         _isUpdatingWorkDayForm = false;
+        RefreshWorkLocationOptions();
         UpdateHolidayHint(selectHoliday: true);
         ApplyWorkDayTypeToForm(resetValues: false);
         RefreshWorkCalendar();
@@ -809,6 +817,12 @@ public partial class MainWindow : Window
             var settings = ReadSettingsFromForm();
             _settingsService.Save(settings);
             _settings = settings;
+            if (_editingWorkDayId == 0)
+            {
+                BreakBox.Text = _settings.DefaultBreak;
+                TargetBox.Text = _settings.DefaultTarget;
+                UpdateCalculatedWorkEnd();
+            }
             UpdateHolidayHint(selectHoliday: _editingWorkDayId == 0);
             RefreshWorkCalendar();
             SettingsInfoText.Text = BuildSettingsInfo("Einstellungen gespeichert.");
@@ -1093,7 +1107,6 @@ public partial class MainWindow : Window
         SettingsHolidayRegionCombo.SelectedValue = region.Code;
         UpdateHolidayRegionSettingsHint(region);
         SettingsDefaultWorkStartBox.Text = _settings.DefaultWorkStart;
-        SettingsDefaultWorkEndBox.Text = _settings.DefaultWorkEnd;
         SettingsDefaultBreakBox.Text = _settings.DefaultBreak;
         SettingsDefaultTargetBox.Text = _settings.DefaultTarget;
         SettingsCsvExportFolderBox.Text = _settings.CsvExportFolder;
@@ -1155,13 +1168,22 @@ public partial class MainWindow : Window
     private AppSettings ReadSettingsFromForm()
     {
         var holidayRegion = GetSelectedHolidayRegion();
+        var defaultWorkStart = NormalizeTimeSetting(
+            SettingsDefaultWorkStartBox.Text,
+            "Standard-Arbeitsbeginn");
+        var defaultBreak = NormalizeTimeSetting(
+            SettingsDefaultBreakBox.Text,
+            "Standard-Pause");
+        var defaultTarget = NormalizeTimeSetting(
+            SettingsDefaultTargetBox.Text,
+            "Standard-Sollzeit");
         var settings = new AppSettings
         {
             DefaultDepartureLocation = SettingsDefaultDepartureLocationBox.Text.Trim(),
-            DefaultWorkStart = NormalizeTimeSetting(SettingsDefaultWorkStartBox.Text, "Standard-Arbeitsbeginn"),
-            DefaultWorkEnd = NormalizeTimeSetting(SettingsDefaultWorkEndBox.Text, "Standard-Arbeitsende"),
-            DefaultBreak = NormalizeTimeSetting(SettingsDefaultBreakBox.Text, "Standard-Pause"),
-            DefaultTarget = NormalizeTimeSetting(SettingsDefaultTargetBox.Text, "Standard-Sollzeit"),
+            DefaultWorkStart = defaultWorkStart,
+            DefaultWorkEnd = CalculateWorkEndText(defaultWorkStart, defaultBreak, defaultTarget),
+            DefaultBreak = defaultBreak,
+            DefaultTarget = defaultTarget,
             HolidayRegionCode = holidayRegion.Code,
             FederalState = holidayRegion.GermanState?.ToString() ?? _settings.FederalState,
             CsvExportFolder = SettingsCsvExportFolderBox.Text.Trim(),
@@ -1185,9 +1207,9 @@ public partial class MainWindow : Window
     private void ApplySettingsDefaultsToWorkDay()
     {
         WorkStartBox.Text = _settings.DefaultWorkStart;
-        WorkEndBox.Text = _settings.DefaultWorkEnd;
         BreakBox.Text = _settings.DefaultBreak;
         TargetBox.Text = _settings.DefaultTarget;
+        UpdateCalculatedWorkEnd();
         if (_editingWorkDayId == 0)
             WorkCountryCombo.SelectedValue = GetDefaultWorkCountryCode();
     }
@@ -1213,9 +1235,9 @@ public partial class MainWindow : Window
     {
         WorkDayTypeCombo.SelectedValue = WorkDayType.Work;
         WorkStartBox.Text = _settings.DefaultWorkStart;
-        WorkEndBox.Text = _settings.DefaultWorkEnd;
         BreakBox.Text = _settings.DefaultBreak;
         TargetBox.Text = _settings.DefaultTarget;
+        UpdateCalculatedWorkEnd();
         IsTravelDayCheck.IsChecked = false;
         TravelWorkTimeBox.Text = "00:00";
         WorkCountryCombo.SelectedValue = GetDefaultWorkCountryCode();
@@ -1239,10 +1261,84 @@ public partial class MainWindow : Window
 
     private void WorkLocationContext_Changed(object sender, RoutedEventArgs e)
     {
+        if (ReferenceEquals(sender, WorkCountryCombo))
+            RefreshWorkLocationOptions();
+
         if (_isUpdatingWorkDayForm || WorkDatePicker.SelectedDate is null)
             return;
 
         UpdateHolidayHint(selectHoliday: _editingWorkDayId == 0);
+    }
+
+    private void WorkStartBox_TextChanged(object? sender, EventArgs e)
+    {
+        if (_isUpdatingWorkDayForm)
+            return;
+
+        UpdateCalculatedWorkEnd();
+    }
+
+    private void IsTravelDayCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingWorkDayForm)
+            return;
+
+        UpdateTravelTimeVisibility();
+    }
+
+    private void UpdateCalculatedWorkEnd()
+    {
+        if (WorkDayTypeCombo is null
+            || WorkStartBox is null
+            || WorkEndBox is null
+            || BreakBox is null
+            || TargetBox is null)
+        {
+            return;
+        }
+
+        if (GetSelectedWorkDayType() is WorkDayType.Vacation or WorkDayType.Sick or WorkDayType.Holiday)
+            return;
+
+        if (!TryParseTimeInput(WorkStartBox.Text, out var start)
+            || !TryParseTimeInput(BreakBox.Text, out var breakTime)
+            || !TryParseTimeInput(TargetBox.Text, out var targetTime))
+        {
+            return;
+        }
+
+        var end = start + breakTime + targetTime;
+        WorkEndBox.Text = $"{(int)end.TotalHours % 24:00}:{end.Minutes:00}";
+    }
+
+    private static string CalculateWorkEndText(
+        string startText,
+        string breakText,
+        string targetText)
+    {
+        var end = ParseTime(startText, "Standard-Arbeitsbeginn")
+                  + ParseTime(breakText, "Standard-Pause")
+                  + ParseTime(targetText, "Standard-Sollzeit");
+        return $"{(int)end.TotalHours % 24:00}:{end.Minutes:00}";
+    }
+
+    private void UpdateTravelTimeVisibility()
+    {
+        var isAbsence = GetSelectedWorkDayType()
+            is WorkDayType.Vacation or WorkDayType.Sick or WorkDayType.Holiday;
+        var visibility = !isAbsence && IsTravelDayCheck.IsChecked == true
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        TravelWorkTimeLabel.Visibility = visibility;
+        TravelWorkTimeBox.Visibility = visibility;
+    }
+
+    private void RefreshWorkLocationOptions()
+    {
+        var currentLocation = WorkLocationBox.Text;
+        WorkLocationBox.ItemsSource = _database.GetWorkLocations(GetSelectedWorkCountryCode());
+        WorkLocationBox.Text = currentLocation;
     }
 
     private void PreviousWorkCalendarMonth_Click(object sender, RoutedEventArgs e)
@@ -1493,17 +1589,19 @@ public partial class MainWindow : Window
     {
         var type = GetSelectedWorkDayType();
         var isAbsence = type is WorkDayType.Vacation or WorkDayType.Sick or WorkDayType.Holiday;
+        var showLocation = !isAbsence && type != WorkDayType.HomeOffice;
+        var workVisibility = isAbsence ? Visibility.Collapsed : Visibility.Visible;
 
-        WorkStartBox.IsEnabled = !isAbsence;
-        WorkEndBox.IsEnabled = !isAbsence;
-        BreakBox.IsEnabled = !isAbsence;
-        IsTravelDayCheck.IsEnabled = !isAbsence;
-        TravelWorkTimeLabel.IsEnabled = !isAbsence;
-        TravelWorkTimeBox.IsEnabled = !isAbsence;
-        WorkCountryLabel.IsEnabled = !isAbsence;
-        WorkCountryCombo.IsEnabled = !isAbsence;
-        WorkLocationLabel.IsEnabled = !isAbsence;
-        WorkLocationBox.IsEnabled = !isAbsence;
+        WorkStartLabel.Visibility = workVisibility;
+        WorkStartBox.Visibility = workVisibility;
+        WorkEndLabel.Visibility = workVisibility;
+        WorkEndBox.Visibility = workVisibility;
+        IsTravelDayCheck.Visibility = workVisibility;
+        WorkCountryLabel.Visibility = workVisibility;
+        WorkCountryCombo.Visibility = workVisibility;
+        WorkLocationLabel.Visibility = showLocation ? Visibility.Visible : Visibility.Collapsed;
+        WorkLocationBox.Visibility = showLocation ? Visibility.Visible : Visibility.Collapsed;
+        UpdateTravelTimeVisibility();
 
         if (!resetValues)
             return;
@@ -1517,14 +1615,16 @@ public partial class MainWindow : Window
             TravelWorkTimeBox.Text = "00:00";
             WorkCountryCombo.SelectedValue = string.Empty;
             WorkLocationBox.Text = string.Empty;
+            UpdateTravelTimeVisibility();
             return;
         }
 
         if (WorkStartBox.Text == "00:00" && WorkEndBox.Text == "00:00")
         {
             WorkStartBox.Text = _settings.DefaultWorkStart;
-            WorkEndBox.Text = _settings.DefaultWorkEnd;
             BreakBox.Text = _settings.DefaultBreak;
+            TargetBox.Text = _settings.DefaultTarget;
+            UpdateCalculatedWorkEnd();
         }
 
         if (type == WorkDayType.HomeOffice)
@@ -1540,6 +1640,8 @@ public partial class MainWindow : Window
                 WorkCountryCombo.SelectedValue = GetDefaultWorkCountryCode();
             WorkLocationBox.Text = _settings.DefaultDepartureLocation;
         }
+
+        UpdateTravelTimeVisibility();
     }
 
     private WorkDayType GetSelectedWorkDayType()
@@ -1672,6 +1774,20 @@ public partial class MainWindow : Window
         if (TimeSpan.TryParse(text, CultureInfo.CurrentCulture, out value))
             return value;
         throw new InvalidOperationException($"Ungültige Zeitangabe bei '{fieldName}'. Bitte im Format HH:mm eingeben, z. B. 07:30.");
+    }
+
+    private static bool TryParseTimeInput(string text, out TimeSpan value)
+    {
+        try
+        {
+            value = ParseTime(text, string.Empty);
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            value = TimeSpan.Zero;
+            return false;
+        }
     }
 
     private static void ShowError(string message)

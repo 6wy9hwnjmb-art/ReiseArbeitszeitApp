@@ -7,6 +7,8 @@ Arbeitszeiten und Überstunden.
 
 - Reisezeitberechnung mit automatischer Zeitzonenerkennung
 - Arbeitszeiterfassung mit Ländern, Einsatzorten, Tagesarten und Feiertagen für deutsche Bundesländer und Schweizer Kantone
+- Dynamische Arbeitszeiterfassung mit automatisch berechnetem Arbeitsende
+- Editierbare Auswahl bereits verwendeter Arbeitsorte nach Land
 - Eigene Feiertage, lokale Ausnahmen und deaktivierbare automatische Feiertage
 - Monatskalender und Jahresauswertung
 - Monats- und Jahresvergleich der Arbeitszeit nach Land und Einsatzort
@@ -15,6 +17,7 @@ Arbeitszeiten und Überstunden.
 - Manuelle und tägliche automatische Datensicherungen
 - Geprüfte Wiederherstellung mit zusätzlicher Rettungskopie
 - Integrierte Updateprüfung und Windows-Installer
+- Plattformunabhängige Core-Bibliothek und erster Sync-API-Prototyp als Grundlage für iOS
 
 ## Entwicklung
 
@@ -26,8 +29,26 @@ Voraussetzungen:
 
 ```powershell
 dotnet build .\ReiseArbeitszeitApp.csproj
+dotnet build .\ReiseArbeitszeitApp.SyncApi\ReiseArbeitszeitApp.SyncApi.csproj
 .\BuildInstaller.ps1
 ```
+
+## iOS- und Sync-Grundlage
+
+Die plattformunabhängigen Modelle und Berechnungen liegen in
+`ReiseArbeitszeitApp.Core`. Dieses Projekt kann später direkt von einer
+.NET-MAUI-iOS-App verwendet werden.
+
+`ReiseArbeitszeitApp.SyncApi` enthält einen ersten lokalen Push/Pull-Prototyp:
+
+```powershell
+dotnet run --project .\ReiseArbeitszeitApp.SyncApi\ReiseArbeitszeitApp.SyncApi.csproj
+```
+
+Die Endpunkte sind `/health`, `/api/sync/push` und `/api/sync/pull`. Der
+aktuelle Speicher ist nur für Entwicklung und Tests gedacht. Vor einem
+öffentlichen Betrieb folgen Benutzeranmeldung, verschlüsselte Cloud-Datenbank
+und dauerhafte Konfliktauflösung.
 
 Die lokale Datenbank und die Einstellungen werden unter
 `%LOCALAPPDATA%\ReiseArbeitszeitApp` gespeichert und bei Updates nicht ersetzt.
